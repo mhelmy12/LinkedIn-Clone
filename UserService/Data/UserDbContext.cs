@@ -11,6 +11,7 @@ public class UserDbContext : DbContext
     }
 
     public DbSet<User> Users { get; set; }
+    public DbSet<Connection> Connections { get; set; }
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -25,6 +26,15 @@ public class UserDbContext : DbContext
             entity.Property(e => e.Email).IsRequired();
             entity.Property(e => e.Password).IsRequired();
             entity.Property(e => e.Role).HasConversion<string>();
+        });
+
+
+        modelBuilder.Entity<Connection>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.RequesterId).IsRequired();
+            entity.Property(e => e.TargetId).IsRequired();
+            entity.Property(e => e.Status).HasConversion<string>();
         });
     }
 
