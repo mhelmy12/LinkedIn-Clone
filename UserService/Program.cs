@@ -3,6 +3,7 @@ using Carter;
 using IdGen.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
 using Shared.Extensions;
+using UserService.Behaviors;
 using UserService.Data;
 using UserService.Services.UserIdGenerator;
 
@@ -32,7 +33,7 @@ builder.Services.AddIdGen(1);
 
 
 #region  Services Container
-builder.Services.AddKeyedScoped<IUserIdGenerator, UserIdSnowflakeGenerator>("Snowflake");
+builder.Services.AddKeyedSingleton<IUserIdGenerator, UserIdSnowflakeGenerator>("Snowflake");
 
 #endregion
 
@@ -55,4 +56,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseExceptionHandler();
 app.MapCarter();
+
+app.MapGet("/users", () => "Hello User Service!").AllowAnonymous();
+
 app.Run();
