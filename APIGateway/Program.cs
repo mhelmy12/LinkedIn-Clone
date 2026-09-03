@@ -46,9 +46,13 @@ builder
         OpenIdConnectDefaults.AuthenticationScheme,
         options =>
         {
-            options.Authority = builder.Configuration.GetValue<string>(
-                "OpenIDConnectSettings:Domain"
-            );
+
+            var domain = Environment.GetEnvironmentVariable("services__keycloak__https__0");
+            var realm = builder.Configuration.GetValue<string>("OpenIDConnectSettings:Domain");
+            // options.Authority = builder.Configuration.GetValue<string>(
+            //     "OpenIDConnectSettings:Domain"
+            // );
+            options.Authority = domain + realm;
             options.ClientId = builder.Configuration.GetValue<string>(
                 "OpenIDConnectSettings:ClientId"
             );
@@ -81,10 +85,10 @@ builder
 
                 OnRedirectToIdentityProviderForSignOut = (context) =>
                 {
-                
+
                     var idTokenHint = context.ProtocolMessage.IdTokenHint;
 
-                    var logoutUri = $"{builder.Configuration.GetValue<string>("OpenIDConnectSettings:Domain")}/protocol/openid-connect/logout" +
+                    var logoutUri = $"{domain}{realm}/protocol/openid-connect/logout" +
                                     $"?client_id={builder.Configuration.GetValue<string>("OpenIDConnectSettings:ClientId")}";
 
                     if (!string.IsNullOrEmpty(idTokenHint))

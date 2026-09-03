@@ -12,7 +12,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Aspire.Hosting.AppHost" Version="9.0.0" />
+    <PackageReference Include="Aspire.Hosting.AppHost" Version="13.5.3" />
+    <PackageReference Include="Aspire.Hosting.Kafka" Version="13.5.3" />
+    <PackageReference Include="Aspire.Hosting.Keycloak" Version="13.5.3-preview.1.26425.3" />
+    <PackageReference Include="Aspire.Hosting.SqlServer" Version="13.5.3" />
+
   </ItemGroup>
 
   <ItemGroup>
