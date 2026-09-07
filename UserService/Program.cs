@@ -4,9 +4,10 @@ using IdGen.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
 using Shared.Extensions;
 using UserService.Behaviors;
+using UserService.Consumers;
 using UserService.Data;
 using UserService.Services.UserIdGenerator;
-
+using Confluent.Kafka;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -14,6 +15,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<UserDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("UserDbConnection")));
 #endregion
+
+
+
 
 
 builder.Services.AddSharedInfrastructure([Assembly.GetExecutingAssembly()], (config) => { config.AddOpenBehavior(typeof(TransactionBehavior<,>)); });
@@ -34,9 +38,9 @@ builder.Services.AddIdGen(1);
 
 #region  Services Container
 builder.Services.AddKeyedSingleton<IUserIdGenerator, UserIdSnowflakeGenerator>("Snowflake");
+builder.Services.AddHostedService<SyncNewUsersToDb>();
 
 #endregion
-
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi

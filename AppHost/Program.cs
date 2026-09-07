@@ -55,13 +55,16 @@ keycloak.WaitFor(sqlserver);
 
 
 var kafka = builder.AddKafka("kafka")
+    .WithEndpoint(port: 9094, targetPort: 9094, name: "external", isProxied: false)
+    .WithEndpoint(targetPort: 9092, name: "internal", isProxied: false)
+    .WithEndpoint(port: 9095, targetPort: 9095, name: "external-docker", isProxied: false)
     .WithImage("confluentinc/cp-kafka", "latest")
     .WithEnvironment("KAFKA_NODE_ID", "1")
     .WithEnvironment("KAFKA_PROCESS_ROLES", "broker,controller")
     .WithEnvironment("KAFKA_CONTROLLER_QUORUM_VOTERS", "1@kafka:9093")
-    .WithEnvironment("KAFKA_LISTENERS", "INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093")
-    .WithEnvironment("KAFKA_ADVERTISED_LISTENERS", "INTERNAL://kafka:29092,EXTERNAL://localhost:9092")
-    .WithEnvironment("KAFKA_LISTENER_SECURITY_PROTOCOL_MAP", "INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT")
+    .WithEnvironment("KAFKA_LISTENERS", "INTERNAL://0.0.0.0:9092,EXTERNAL_DOCKER://0.0.0.0:9095,EXTERNAL://0.0.0.0:9094,CONTROLLER://0.0.0.0:9093")
+    .WithEnvironment("KAFKA_ADVERTISED_LISTENERS", "INTERNAL://kafka:9092,EXTERNAL_DOCKER://host.docker.internal:9095,EXTERNAL://localhost:9094,CONTROLLER://kafka:9093")
+    .WithEnvironment("KAFKA_LISTENER_SECURITY_PROTOCOL_MAP", "INTERNAL:PLAINTEXT,EXTERNAL_DOCKER:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT")
     .WithEnvironment("KAFKA_INTER_BROKER_LISTENER_NAME", "INTERNAL")
     .WithEnvironment("KAFKA_CONTROLLER_LISTENER_NAMES", "CONTROLLER")
     .WithEnvironment("KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR", "1")
@@ -73,12 +76,10 @@ var kafka = builder.AddKafka("kafka")
 
 
 
-var kafkaUi = builder.AddContainer("kafka-ui", "provectuslabs/kafka-ui", "latest")
-.WithHttpEndpoint(port: 8080, targetPort: 8080, name: "http", isProxied: false)
-
+var kafkaUi = builder.AddContainer("kafka-ui", "kafbat/kafka-ui", "latest")
+.WithHttpEndpoint(port: 8088, targetPort: 8080, name: "http", isProxied: false)
     .WithEnvironment("KAFKA_CLUSTERS_0_NAME", "local")
-    .WithEnvironment("KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS", "kafka:29092")
-    .WithEnvironment("KAFKA_CLUSTERS_0_SCHEMAREGISTRY", "http://schema-registry:8081")
+    .WithEnvironment("KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS", "kafka:9092")
     .WithReference(kafka)
       .WithUrls(context =>
         {
@@ -100,7 +101,7 @@ var kafkaUi = builder.AddContainer("kafka-ui", "provectuslabs/kafka-ui", "latest
 
 
 var debezium = builder.AddContainer("debezium", "quay.io/debezium/connect", "latest")
-    .WithEnvironment("BOOTSTRAP_SERVERS", "kafka:29092")
+    .WithEnvironment("BOOTSTRAP_SERVERS", "kafka:9092")
     .WithEnvironment("GROUP_ID", "banking-connect")
     .WithEnvironment("CONFIG_STORAGE_TOPIC", "connect_configs")
     .WithEnvironment("OFFSET_STORAGE_TOPIC", "connect_offsets")
@@ -137,7 +138,7 @@ var debeziumUi = builder.AddContainer("debezium-ui", "debezium/debezium-ui", "la
 debezium.WaitFor(kafka).WaitFor(sqlserver);
 
 
-var userService = builder.AddProject<UserService>("user-service");
+var userService = builder.AddProject<UserService>("user-service").WithReference(kafka, "kafka").WithReference(sqlserver, "sqlserver").WithReference(keycloak, "keycloak").WithExternalHttpEndpoints();
 
 builder.AddProject<APIGateway>("APIGateway").WithReference(userService).WithReference(keycloak, "keycloak").WithExternalHttpEndpoints();
 builder.Build().Run();
