@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\APIGateway\APIGateway.csproj" />
+    <ProjectReference Include="..\SearchService\SearchService.csproj" />
     <ProjectReference Include="..\UserService\UserService.csproj" />
   </ItemGroup>
 

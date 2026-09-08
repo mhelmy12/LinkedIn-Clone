@@ -62,5 +62,9 @@ app.UseExceptionHandler();
 app.MapCarter();
 
 app.MapGet("/users", () => "Hello User Service!").AllowAnonymous();
+app.MapGet("/users/getToken", (HttpContext context) =>
 
+ context.Request.Headers["Authorization"].ToString().Replace("Bearer ", "")
+
+).AllowAnonymous();
 app.Run();

@@ -137,8 +137,29 @@ var debeziumUi = builder.AddContainer("debezium-ui", "debezium/debezium-ui", "la
         });
 debezium.WaitFor(kafka).WaitFor(sqlserver);
 
+//  elasticsearch:
+//     image: elasticsearch:8.11.0
+//     container_name: elasticsearch
+//     environment:
+//       - discovery.type=single-node
+//       - xpack.security.enabled=false
+//       - ES_JAVA_OPTS=-Xms512m -Xmx512m
+//     ports:
+//       - "9200:9200"
+//     volumes:
+//       - elasticsearch_data:/usr/share/elasticsearch/data
+
+
+var elasticsearch = builder.AddElasticsearch("elasticsearch")
+.WithImageTag("8.11.0")
+    .WithEnvironment("discovery.type", "single-node")
+    .WithEnvironment("xpack.security.enabled", "false")
+    .WithEnvironment("ES_JAVA_OPTS", "-Xms512m -Xmx512m")
+    .WithHttpEndpoint(port: 9200, targetPort: 9200, name: "http", isProxied: false)
+    .WithDataVolume("elasticsearch_data");
 
 var userService = builder.AddProject<UserService>("user-service").WithReference(kafka, "kafka").WithReference(sqlserver, "sqlserver").WithReference(keycloak, "keycloak").WithExternalHttpEndpoints();
+var searchService = builder.AddProject<SearchService>("search-service").WithReference(kafka, "kafka").WithReference(elasticsearch, "elasticsearch").WithExternalHttpEndpoints();
 
 builder.AddProject<APIGateway>("APIGateway").WithReference(userService).WithReference(keycloak, "keycloak").WithExternalHttpEndpoints();
 builder.Build().Run();
