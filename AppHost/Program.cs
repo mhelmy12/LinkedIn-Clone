@@ -161,5 +161,9 @@ var elasticsearch = builder.AddElasticsearch("elasticsearch")
 var userService = builder.AddProject<UserService>("user-service").WithReference(kafka, "kafka").WithReference(sqlserver, "sqlserver").WithReference(keycloak, "keycloak").WithExternalHttpEndpoints();
 var searchService = builder.AddProject<SearchService>("search-service").WithReference(kafka, "kafka").WithReference(elasticsearch, "elasticsearch").WithExternalHttpEndpoints();
 
-builder.AddProject<APIGateway>("APIGateway").WithReference(userService).WithReference(keycloak, "keycloak").WithExternalHttpEndpoints();
+builder.AddProject<APIGateway>("APIGateway")
+.WithReference(userService)
+.WithReference(keycloak, "keycloak")
+.WithReference(searchService)
+.WithExternalHttpEndpoints();
 builder.Build().Run();
