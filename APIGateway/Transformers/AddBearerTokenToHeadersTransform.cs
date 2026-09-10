@@ -36,5 +36,6 @@ public class AddBearerTokenToHeadersTransform(ILogger<AddBearerTokenToHeadersTra
             "Bearer",
             accessToken.Token.AccessToken
         );
+        context.ProxyRequest.Headers.Add("X-User-Id", context.HttpContext.User.FindFirst("sub")?.Value);
     }
 }

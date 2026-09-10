@@ -39,6 +39,10 @@ public class User
 
     public string Role { get; set; }
 
+    public List<string> Skills { get; set; } = new List<string>();
+
+
+
 
 
 
