@@ -50,15 +50,15 @@ public class SendConnectionCommandHandler(
         var connection = new Connection
         {
             Id = long.Parse(IdGenerator.Generate()),
-            RequesterId = long.Parse(currentUserId),
-            TargetId = long.Parse(request.TargetUserId),
+            RequesterId = currentUserId,
+            TargetId = request.TargetUserId,
             Status = ConnectionStatus.PENDING,
         };
 
         dbContext.Connections.Add(connection);
         return Success(new SendConnectionCommandResponse
         (
-            connection.Id,
+            connection.Id.ToString(),
             connection.RequesterId,
             connection.TargetId
 

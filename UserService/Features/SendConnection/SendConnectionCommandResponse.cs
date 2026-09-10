@@ -3,7 +3,7 @@ using System;
 namespace UserService.Features.SendConnection;
 
 public record SendConnectionCommandResponse(
-    long ConnectionId,
-    long RequesterId,
-    long TargetUserId
+    string ConnectionId,
+    string RequesterId,
+    string TargetUserId
 );

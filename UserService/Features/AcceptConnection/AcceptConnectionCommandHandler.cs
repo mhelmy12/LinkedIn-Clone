@@ -20,8 +20,8 @@ public class AcceptConnectionCommandHandler(
 {
     public async Task<Response<AcceptConnectionCommandResponse>> Handle(AcceptConnectionCommand request, CancellationToken cancellationToken)
     {
-        var currentUserIdStr = currentUserService.GetCurrentUserId();
-        if (string.IsNullOrEmpty(currentUserIdStr) || !long.TryParse(currentUserIdStr, out var currentUserId))
+        var currentUserId = currentUserService.GetCurrentUserId();
+        if (string.IsNullOrEmpty(currentUserId))
         {
             return BadRequest<AcceptConnectionCommandResponse>("Current user not found or invalid ID.");
         }

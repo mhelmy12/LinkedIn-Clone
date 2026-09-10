@@ -10,10 +10,12 @@ public class Connection
     [Key]
     public long Id { get; set; }
 
-    public long RequesterId { get; set; }
+    public string RequesterId { get; set; }
 
-    public long TargetId { get; set; }
+    public string TargetId { get; set; }
 
     public ConnectionStatus Status { get; set; }
+
+    public bool IsDeleted { get; set; } = false;
 
 }
