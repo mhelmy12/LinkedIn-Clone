@@ -5,14 +5,14 @@ using Elastic.Clients.Elasticsearch;
 
 namespace SearchService.Consumers;
 
-public class SyncUsersToElasticConsumer : BackgroundService
+public class UpdatedProfileUserConsumer : BackgroundService
 {
-    private readonly ILogger<SyncUsersToElasticConsumer> _logger;
+    private readonly ILogger<UpdatedProfileUserConsumer> _logger;
     private readonly IServiceScopeFactory _serviceScopeFactory;
     private readonly IConfiguration _configuration;
     private readonly ElasticsearchClient _elasticClient;
-    public SyncUsersToElasticConsumer(
-        ILogger<SyncUsersToElasticConsumer> logger,
+    public UpdatedProfileUserConsumer(
+        ILogger<UpdatedProfileUserConsumer> logger,
         IConfiguration configuration,
         IServiceScopeFactory serviceScopeFactory,
         ElasticsearchClient elasticClient
@@ -33,14 +33,14 @@ public class SyncUsersToElasticConsumer : BackgroundService
          var config = new ConsumerConfig
          {
              BootstrapServers = _configuration.GetValue<string>("Kafka:BootstrapServers"),
-             GroupId = _configuration.GetValue<string>("Kafka:GroupId"),
+             GroupId = "UpdatedProfileUserGroup1",
              AutoOffsetReset = AutoOffsetReset.Earliest,
              BrokerAddressFamily = BrokerAddressFamily.V4,
          };
 
          _logger.LogInformation("Kafka consumer configuration: {@Config}", config);
          using var consumer = new ConsumerBuilder<string, string>(config).Build();
-         consumer.Subscribe("identityserver_v2.keycloak-db.dbo.USER_ENTITY");
+         consumer.Subscribe("outboxmessages.LinkedInUserDb.dbo.OutboxMessages");
 
          while (!stoppingToken.IsCancellationRequested)
          {
@@ -48,20 +48,25 @@ public class SyncUsersToElasticConsumer : BackgroundService
              try
              {
                  var consumeResult = consumer.Consume(stoppingToken);
+                 consumer.Commit(consumeResult);
+                 using var mainDoc = JsonDocument.Parse(consumeResult.Message.Value);
 
-                 using var document = JsonDocument.Parse(consumeResult.Message.Value);
-                 var payload = document.RootElement.GetProperty("payload");
+                 string innerPayloadJson = mainDoc.RootElement
+                     .GetProperty("payload")
+                     .GetProperty("Payload")
+                     .GetString()!;
+
+                 using var payloadDoc = JsonDocument.Parse(innerPayloadJson);
+                 var payload = payloadDoc.RootElement;
                  _logger.LogInformation("Received message from Kafka: {Message}", payload.ToString());
 
-                 var email = payload.GetProperty("EMAIL").GetString();
-                 if (string.IsNullOrEmpty(email))
-                 {
-                     continue;
-                 }
-                 var firstName = payload.GetProperty("FIRST_NAME").GetString();
-                 var lastName = payload.GetProperty("LAST_NAME").GetString();
-                 var keycloakId = payload.GetProperty("ID").GetString();
-                 _logger.LogInformation("Received message from Kafka: {Email}, {FirstName}, {LastName}, {KeycloakId}", email, firstName, lastName, keycloakId);
+                 var email = payload.GetProperty("Email").GetString();
+                 var firstName = payload.GetProperty("FirstName").GetString();
+                 var lastName = payload.GetProperty("LastName").GetString();
+                 var keycloakId = payload.GetProperty("UserId").GetString();
+                 var headline = payload.GetProperty("Headline").GetString();
+                 var jobTitle = payload.GetProperty("JobTitle").GetString();
+                 _logger.LogInformation("Received message from Kafka: {Email}, {FirstName}, {LastName}, {KeycloakId} {Headline}, {JobTitle}", email, firstName, lastName, keycloakId, headline, jobTitle);
                  //add to elastic
 
                  var userSearchDocument = new UserSearchDocument
@@ -69,7 +74,9 @@ public class SyncUsersToElasticConsumer : BackgroundService
                      Id = keycloakId,
                      FirstName = firstName ?? "",
                      LastName = lastName ?? "",
-                     Email = email
+                     Email = email,
+                     Headline = headline ?? "",
+                     JobTitle = jobTitle ?? ""
                  };
 
                  var indexResponse = await _elasticClient.IndexAsync(
@@ -84,10 +91,6 @@ public class SyncUsersToElasticConsumer : BackgroundService
 
 
              }
-             catch (OperationCanceledException)
-             {
-                 break;
-             }
              catch (Exception ex)
              {
                  _logger.LogError(ex, "Error processing Kafka message");
@@ -100,16 +103,4 @@ public class SyncUsersToElasticConsumer : BackgroundService
 
 
     }
-}
-
-public class UserSearchDocument
-{
-    public string Id { get; set; }
-    public string FirstName { get; set; }
-    public string LastName { get; set; }
-    public string Email { get; set; }
-
-    public string? Headline { get; set; }
-
-    public string? JobTitle { get; set; }
 }

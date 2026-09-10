@@ -15,6 +15,7 @@ var settings = new ElasticsearchClientSettings(new Uri(elasticConnectionString ?
 builder.Services.AddSingleton(new ElasticsearchClient(settings));
 
 builder.Services.AddHostedService<SyncUsersToElasticConsumer>();
+builder.Services.AddHostedService<UpdatedProfileUserConsumer>();
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
