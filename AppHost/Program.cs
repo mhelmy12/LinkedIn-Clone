@@ -137,17 +137,7 @@ var debeziumUi = builder.AddContainer("debezium-ui", "debezium/debezium-ui", "la
         });
 debezium.WaitFor(kafka).WaitFor(sqlserver);
 
-//  elasticsearch:
-//     image: elasticsearch:8.11.0
-//     container_name: elasticsearch
-//     environment:
-//       - discovery.type=single-node
-//       - xpack.security.enabled=false
-//       - ES_JAVA_OPTS=-Xms512m -Xmx512m
-//     ports:
-//       - "9200:9200"
-//     volumes:
-//       - elasticsearch_data:/usr/share/elasticsearch/data
+
 
 
 var elasticsearch = builder.AddElasticsearch("elasticsearch")
@@ -158,11 +148,48 @@ var elasticsearch = builder.AddElasticsearch("elasticsearch")
     .WithHttpEndpoint(port: 9200, targetPort: 9200, name: "http", isProxied: false)
     .WithDataVolume("elasticsearch_data");
 
+
+
+var minioUser = builder.AddParameter("MinioUser", secret: false);
+var minioPassword = builder.AddParameter("MinioPassword", secret: true);
+
+
+var minio = builder.AddContainer("minio", "minio/minio", "RELEASE.2025-02-18T16-25-55Z")
+    .WithHttpEndpoint(port: 9000, targetPort: 9000, name: "api")       // S3 API Port
+    .WithHttpEndpoint(port: 9001, targetPort: 9001, name: "dashboard") // Web Dashboard Port
+    .WithEnvironment("MINIO_ROOT_USER", minioUser)
+    .WithEnvironment("MINIO_ROOT_PASSWORD", minioPassword)
+    .WithArgs("server", "/data", "--console-address", ":9001")
+    .WithVolume("minio_data", "/data")
+    .WithUrls(context =>
+        {
+            foreach (var u in context.Urls)
+            {
+                u.DisplayLocation = UrlDisplayLocation.DetailsOnly;
+            }
+
+            context.Urls.Add(
+                new ResourceUrlAnnotation()
+                {
+                    Url = "/",
+                    DisplayText = "MinIO Dashboard",
+                    Endpoint = context.GetEndpoint("dashboard"),
+                }
+            );
+        });
+
 var userService = builder.AddProject<UserService>("user-service")
 .WithReference(kafka, "kafka")
 .WithReference(sqlserver, "sqlserver")
 .WithReference(keycloak, "keycloak")
+.WithEnvironment("AWS__AccessKey", minioUser)
+.WithEnvironment("AWS__SecretKey", minioPassword)
+.WithEnvironment("AWS__ServiceUrl", minio.GetEndpoint("api"))
 .WithExternalHttpEndpoints();
+
+
+
+
 var searchService = builder.AddProject<SearchService>("search-service")
 .WithReference(kafka, "kafka")
 .WithReference(elasticsearch, "elasticsearch")
