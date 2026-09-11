@@ -25,7 +25,7 @@ public class GetUploadUrlQueryHandler(
         var bucketName = configuration["AWS:BucketName"];
         var fileKey = $"profile-pictures/{currentUserId}.webp";
         var finalPhotoUrl = string.IsNullOrEmpty(serviceUrl)
-            ? $"https://{bucketName}.s3.amazonaws.com/{fileKey}"
+            ? $"http://{bucketName}.s3.amazonaws.com/{fileKey}"
             : $"{serviceUrl}/{bucketName}/{fileKey}";
 
 
