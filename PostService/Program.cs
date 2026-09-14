@@ -26,15 +26,16 @@ builder.Services.AddIdGen(2);
 #endregion
 
 #region Redis Configuration
-string redisConnectionString = builder.Configuration.GetConnectionString("Redis")
-                               ?? throw new InvalidOperationException("Redis connection string is missing.");
-builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
-{
-    var configuration = ConfigurationOptions.Parse(redisConnectionString, true);
-    return ConnectionMultiplexer.Connect(configuration);
-});
-#endregion
 
+builder.AddRedisClient("redis");
+// string redisConnectionString = builder.Configuration.GetConnectionString("Redis")
+//                                ?? throw new InvalidOperationException("Redis connection string is missing.");
+// builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
+// {
+//     var configuration = ConfigurationOptions.Parse(redisConnectionString, true);
+//     return ConnectionMultiplexer.Connect(configuration);
+// });
+#endregion
 
 #region  Services Container
 builder.Services.AddKeyedSingleton<IUserIdGenerator, UserIdSnowflakeGenerator>("Snowflake");

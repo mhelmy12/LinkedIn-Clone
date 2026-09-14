@@ -178,10 +178,34 @@ var minio = builder.AddContainer("minio", "minio/minio", "RELEASE.2025-02-18T16-
             );
         });
 
+
+
+// redis:
+//     image: redis:alpine
+//     command: redis-server --appendonly yes
+//     container_name: redisdb
+//     volumes:
+//       - redis_data:/data
+//     ports:
+//       - "6379:6379"
+var redis = builder.AddRedis("redis")
+    .WithDataVolume(isReadOnly: false, name: "redis_data")
+    .WithRedisInsight(redisInsight => redisInsight.WithHostPort(8001));
+
+;
+
+
 var userService = builder.AddProject<UserService>("user-service")
 .WithReference(kafka, "kafka")
 .WithReference(sqlserver, "sqlserver")
 .WithReference(keycloak, "keycloak")
+.WithExternalHttpEndpoints();
+
+
+var postService = builder.AddProject<PostService>("post-service")
+.WithReference(kafka, "kafka")
+.WithReference(sqlserver, "sqlserver")
+.WithReference(redis, "redis")
 .WithExternalHttpEndpoints();
 
 

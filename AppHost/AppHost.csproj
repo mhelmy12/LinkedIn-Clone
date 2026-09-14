@@ -16,6 +16,7 @@
     <PackageReference Include="Aspire.Hosting.Elasticsearch" Version="13.3.0" />
     <PackageReference Include="Aspire.Hosting.Kafka" Version="13.5.3" />
     <PackageReference Include="Aspire.Hosting.Keycloak" Version="13.5.3-preview.1.26425.3" />
+    <PackageReference Include="Aspire.Hosting.Redis" Version="13.5.3" />
     <PackageReference Include="Aspire.Hosting.SqlServer" Version="13.5.3" />
 
   </ItemGroup>
@@ -23,6 +24,7 @@
   <ItemGroup>
     <ProjectReference Include="..\APIGateway\APIGateway.csproj" />
     <ProjectReference Include="..\MediaService\MediaService.csproj" />
+    <ProjectReference Include="..\PostService\PostService.csproj" />
     <ProjectReference Include="..\SearchService\SearchService.csproj" />
     <ProjectReference Include="..\UserService\UserService.csproj" />
   </ItemGroup>
