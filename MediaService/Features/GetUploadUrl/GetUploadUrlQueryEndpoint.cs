@@ -3,13 +3,13 @@ using Carter;
 using MediatR;
 using Shared.Helpers;
 
-namespace UserService.Features.GetUploadUrl;
+namespace MediaService.Features.GetUploadUrl;
 
 public class GetUploadUrlQueryEndpoint : ICarterModule
 {
     public void AddRoutes(IEndpointRouteBuilder app)
     {
-        app.MapGet("/users/upload-url", async (IMediator mediator) =>
+        app.MapGet("/media/upload-url", async (IMediator mediator) =>
         {
             var query = new GetUploadUrlQuery();
             var response = await mediator.Send(query);

@@ -1,9 +1,9 @@
 using System;
 using MediatR;
 using Shared.Helpers;
-using UserService.Services.S3;
+using MediaService.Services.S3;
 
-namespace UserService.Features.GetDownloadUrlByObjectKey;
+namespace MediaService.Features.GetDownloadUrlByObjectKey;
 
 public class GetDownloadUrlByObjectKeyQueryHandler : ResponseHandler, IRequestHandler<GetDownloadUrlByObjectKeyQuery, Response<GetDownloadUrlByObjectKeyQueryResponse>>
 {
@@ -16,7 +16,7 @@ public class GetDownloadUrlByObjectKeyQueryHandler : ResponseHandler, IRequestHa
 
     public async Task<Response<GetDownloadUrlByObjectKeyQueryResponse>> Handle(GetDownloadUrlByObjectKeyQuery request, CancellationToken cancellationToken)
     {
-        var downloadUrl = _s3Service.GeneratePresignedUrlForDownload(request.ObjectKey);
+        var downloadUrl = await _s3Service.GeneratePresignedUrlForDownload(request.ObjectKey);
         var response = new GetDownloadUrlByObjectKeyQueryResponse(downloadUrl);
         return Success(response);
     }

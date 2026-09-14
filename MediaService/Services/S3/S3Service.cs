@@ -3,7 +3,7 @@ using Amazon.S3;
 using Amazon.S3.Model;
 using Amazon.S3.Util;
 
-namespace UserService.Services.S3;
+namespace MediaService.Services.S3;
 
 public class S3Service : IS3Service
 {
@@ -11,7 +11,7 @@ public class S3Service : IS3Service
     private readonly string _bucketName;
     private readonly ILogger<S3Service> logger;
 
-    public S3Service(IConfiguration configuration)
+    public S3Service(IConfiguration configuration, ILogger<S3Service> logger)
     {
         var awsConfig = configuration.GetSection("AWS");
 
@@ -23,7 +23,10 @@ public class S3Service : IS3Service
         _bucketName = awsConfig["BucketName"]
             ?? throw new ArgumentNullException("AWS:BucketName Configuration is missing.");
 
-        var s3Config = new AmazonS3Config();
+        var s3Config = new AmazonS3Config()
+        {
+            UseHttp = true,
+        };
 
         if (!string.IsNullOrEmpty(serviceUrl))
         {
@@ -37,6 +40,7 @@ public class S3Service : IS3Service
 
         var credentials = new Amazon.Runtime.BasicAWSCredentials(accessKey, secretKey);
         _s3Client = new AmazonS3Client(credentials, s3Config);
+        this.logger = logger;
     }
 
     public async Task EnsureBucketExistsAsync(CancellationToken cancellationToken = default)
@@ -55,7 +59,7 @@ public class S3Service : IS3Service
         }
     }
 
-    public string GeneratePresignedUrlForDownload(string objectKey)
+    public async Task<string> GeneratePresignedUrlForDownload(string objectKey)
     {
         var request = new GetPreSignedUrlRequest
         {
@@ -69,8 +73,10 @@ public class S3Service : IS3Service
         return result;
     }
 
-    public string GeneratePresignedUrlForUpload(string userId, string contentType, int expirationInMinutes = 5)
+    public async Task<string> GeneratePresignedUrlForUpload(string userId, string contentType, int expirationInMinutes = 5)
     {
+
+        await EnsureBucketExistsAsync();
         var fileKey = $"profile-pictures/{userId}.webp";
 
         var request = new GetPreSignedUrlRequest
@@ -85,3 +91,4 @@ public class S3Service : IS3Service
         return _s3Client.GetPreSignedURL(request);
     }
 }
+

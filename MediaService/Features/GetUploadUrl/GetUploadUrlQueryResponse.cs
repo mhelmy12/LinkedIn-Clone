@@ -1,5 +1,5 @@
 using System;
 
-namespace UserService.Features.GetUploadUrl;
+namespace MediaService.Features.GetUploadUrl;
 
 public record GetUploadUrlQueryResponse(string UploadUrl, string FinalPhotoUrl);

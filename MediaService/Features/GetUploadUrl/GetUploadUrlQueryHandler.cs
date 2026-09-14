@@ -1,10 +1,10 @@
 using System;
 using MediatR;
 using Shared.Helpers;
-using UserService.Services.CurrentUserService;
-using UserService.Services.S3;
+using MediaService.Services.CurrentUserService;
+using MediaService.Services.S3;
 
-namespace UserService.Features.GetUploadUrl;
+namespace MediaService.Features.GetUploadUrl;
 
 public class GetUploadUrlQueryHandler(
     [FromKeyedServices("Headers")] ICurrentUserService currentUserService,
@@ -19,7 +19,7 @@ public class GetUploadUrlQueryHandler(
         if (string.IsNullOrEmpty(currentUserId))
             return Unauthorized<GetUploadUrlQueryResponse>("User not authenticated.");
 
-        var uploadUrl = s3Service.GeneratePresignedUrlForUpload(currentUserId, "image/webp");
+        var uploadUrl = await s3Service.GeneratePresignedUrlForUpload(currentUserId, "image/webp");
         var bucketName = configuration["AWS:BucketName"];
         var fileKey = $"profile-pictures/{currentUserId}.webp";
         var finalPhotoUrl = $"{bucketName}/{fileKey}";

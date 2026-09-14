@@ -2,7 +2,7 @@ using System;
 using MediatR;
 using Shared.Helpers;
 
-namespace UserService.Features.GetDownloadUrlByObjectKey;
+namespace MediaService.Features.GetDownloadUrlByObjectKey;
 
 public record GetDownloadUrlByObjectKeyQuery(
     string ObjectKey

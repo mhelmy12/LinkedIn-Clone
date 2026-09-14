@@ -182,11 +182,15 @@ var userService = builder.AddProject<UserService>("user-service")
 .WithReference(kafka, "kafka")
 .WithReference(sqlserver, "sqlserver")
 .WithReference(keycloak, "keycloak")
+.WithExternalHttpEndpoints();
+
+
+
+var mediaService = builder.AddProject<MediaService>("media-service")
 .WithEnvironment("AWS__AccessKey", minioUser)
 .WithEnvironment("AWS__SecretKey", minioPassword)
 .WithEnvironment("AWS__ServiceUrl", minio.GetEndpoint("api"))
 .WithExternalHttpEndpoints();
-
 
 
 
@@ -198,7 +202,8 @@ var searchService = builder.AddProject<SearchService>("search-service")
 
 builder.AddProject<APIGateway>("APIGateway")
 .WithReference(userService)
-.WithReference(keycloak, "keycloak")
+.WithReference(mediaService)
 .WithReference(searchService)
+.WithReference(keycloak, "keycloak")
 .WithExternalHttpEndpoints();
 builder.Build().Run();

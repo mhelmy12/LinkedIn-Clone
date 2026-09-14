@@ -2,6 +2,6 @@ using System;
 using MediatR;
 using Shared.Helpers;
 
-namespace UserService.Features.GetUploadUrl;
+namespace MediaService.Features.GetUploadUrl;
 
 public record GetUploadUrlQuery() : IRequest<Response<GetUploadUrlQueryResponse>>;

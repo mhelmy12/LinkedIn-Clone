@@ -1,7 +1,7 @@
 using System;
 using FluentValidation;
 
-namespace UserService.Features.GetDownloadUrlByObjectKey;
+namespace MediaService.Features.GetDownloadUrlByObjectKey;
 
 public class GetDownloadUrlByObjectKeyQueryValidation : AbstractValidator<GetDownloadUrlByObjectKeyQuery>
 {

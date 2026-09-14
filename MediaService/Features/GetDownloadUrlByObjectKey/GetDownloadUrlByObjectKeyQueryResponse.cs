@@ -1,6 +1,6 @@
 using System;
 
-namespace UserService.Features.GetDownloadUrlByObjectKey;
+namespace MediaService.Features.GetDownloadUrlByObjectKey;
 
 public record GetDownloadUrlByObjectKeyQueryResponse(
     string DownloadUrl

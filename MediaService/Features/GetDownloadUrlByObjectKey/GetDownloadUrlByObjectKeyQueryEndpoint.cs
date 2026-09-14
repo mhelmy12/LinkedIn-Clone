@@ -3,13 +3,13 @@ using Carter;
 using MediatR;
 using Shared.Helpers;
 
-namespace UserService.Features.GetDownloadUrlByObjectKey;
+namespace MediaService.Features.GetDownloadUrlByObjectKey;
 
 public class GetDownloadUrlByObjectKeyQueryEndpoint : ICarterModule
 {
     public void AddRoutes(IEndpointRouteBuilder app)
     {
-        app.MapGet("/users/download-url", async (string objectKey, IMediator mediator) =>
+        app.MapGet("/media/download-url", async (string objectKey, IMediator mediator) =>
         {
             var query = new GetDownloadUrlByObjectKeyQuery(objectKey);
             var response = await mediator.Send(query);

@@ -9,7 +9,6 @@ using UserService.Data;
 using UserService.Services.UserIdGenerator;
 using Confluent.Kafka;
 using UserService.Services.CurrentUserService;
-using UserService.Services.S3;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -41,9 +40,8 @@ builder.Services.AddIdGen(1);
 #region  Services Container
 builder.Services.AddKeyedSingleton<IUserIdGenerator, UserIdSnowflakeGenerator>("Snowflake");
 builder.Services.AddHttpContextAccessor();
-builder.Services.AddSingleton<IS3Service, S3Service>();
-builder.Services.AddKeyedScoped<ICurrentUserService, CurrentUserFromToken>("Token");
 builder.Services.AddKeyedScoped<ICurrentUserService, CurrentUserFromHeaders>("Headers");
+builder.Services.AddKeyedScoped<ICurrentUserService, CurrentUserFromToken>("Token");
 builder.Services.AddHostedService<SyncNewUsersToDb>();
 
 #endregion
