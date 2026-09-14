@@ -20,13 +20,9 @@ public class GetUploadUrlQueryHandler(
             return Unauthorized<GetUploadUrlQueryResponse>("User not authenticated.");
 
         var uploadUrl = s3Service.GeneratePresignedUrlForUpload(currentUserId, "image/webp");
-
-        var serviceUrl = configuration["AWS:ServiceUrl"];
         var bucketName = configuration["AWS:BucketName"];
         var fileKey = $"profile-pictures/{currentUserId}.webp";
-        var finalPhotoUrl = string.IsNullOrEmpty(serviceUrl)
-            ? $"http://{bucketName}.s3.amazonaws.com/{fileKey}"
-            : $"{serviceUrl}/{bucketName}/{fileKey}";
+        var finalPhotoUrl = $"{bucketName}/{fileKey}";
 
 
 

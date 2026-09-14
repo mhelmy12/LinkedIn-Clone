@@ -55,6 +55,20 @@ public class S3Service : IS3Service
         }
     }
 
+    public string GeneratePresignedUrlForDownload(string objectKey)
+    {
+        var request = new GetPreSignedUrlRequest
+        {
+            BucketName = _bucketName,
+            Key = objectKey,
+            Verb = HttpVerb.GET,
+            Expires = DateTime.Now.AddMinutes(5)
+        };
+        var result = _s3Client.GetPreSignedURL(request);
+
+        return result;
+    }
+
     public string GeneratePresignedUrlForUpload(string userId, string contentType, int expirationInMinutes = 5)
     {
         var fileKey = $"profile-pictures/{userId}.webp";
