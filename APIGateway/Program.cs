@@ -21,6 +21,8 @@ builder.Services.AddAntiforgery(options =>
     options.Cookie.SameSite = SameSiteMode.Strict;
 });
 
+builder.AddRedisClient("redis");
+
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddOpenIdConnectAccessTokenManagement();
 

@@ -228,6 +228,8 @@ builder.AddProject<APIGateway>("APIGateway")
 .WithReference(userService)
 .WithReference(mediaService)
 .WithReference(searchService)
+.WithReference(postService)
 .WithReference(keycloak, "keycloak")
+.WithReference(redis)
 .WithExternalHttpEndpoints();
 builder.Build().Run();

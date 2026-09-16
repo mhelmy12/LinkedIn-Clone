@@ -7,8 +7,6 @@ public class PostHashtag
 {
 
     [DatabaseGenerated(DatabaseGeneratedOption.None)]
-    public long Id { get; set; } // Snowflake ID
     public long PostId { get; set; } // Snowflake ID
-    public string Hashtag { get; set; } = string.Empty;
-
+    public string NormalizedName { get; set; } = default!;
 }

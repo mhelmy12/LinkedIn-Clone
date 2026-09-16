@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json.Serialization;
 
 namespace PostService.Models;
 
@@ -15,9 +16,12 @@ public class PostMedia
 
     public int DisplayOrder { get; set; } = 0;
 
+    public Post Post { get; set; } = default!;
+
 }
 
 
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum MediaType
 {
     Image,

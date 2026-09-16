@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace PostService.Models;
 
@@ -13,50 +14,52 @@ public class Post
 
     public long Id { get; set; } // Snowflake ID
 
-    public long AuthorId { get; set; }
+    public string AuthorId { get; set; }
 
-    public AuthorType AuthorType { get; set; } = AuthorType.User;
 
-    public string Content { get; set; } = string.Empty;
+    public string? Content { get; set; } = string.Empty;
 
     public PostType Type { get; set; }
 
-    public long? OriginalPostId { get; set; }
+    public long? QuotedPostId { get; set; }
 
     public VisibilityType Visibility { get; set; } = VisibilityType.Public;
 
     public StatusType Status { get; set; } = StatusType.Draft;
 
-    public long ReactionCount { get; set; } = 0;
-
-    public long CommentCount { get; set; } = 0;
-
-    public long RepostCount { get; set; } = 0;
-
     public DateTime CreatedAt { get; set; } = DateTime.Now;
 
     public DateTime? UpdatedAt { get; set; } = null;
 
+    public bool IsDeleted { get; set; } = false;
+
+    public ICollection<PostMedia> Media { get; set; } = new List<PostMedia>();
+    public ICollection<PostMention> Mentions { get; set; } = new List<PostMention>();
+    public ICollection<PostHashtag> PostHashtags { get; set; } = new List<PostHashtag>();
+
 }
 
-public enum AuthorType
-{
-    User,
-    Company
-}
 
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum VisibilityType
 {
     Public,
+    Private,
     Connections
 }
 
+
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum StatusType
 {
     Draft,
     Published
 }
 
+
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum PostType
 {
     Original,

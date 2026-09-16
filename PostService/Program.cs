@@ -18,7 +18,7 @@ builder.Services.AddSharedInfrastructure([Assembly.GetExecutingAssembly()], (con
 
 #region Database Configuration
 builder.Services.AddDbContext<PostDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("UserDbConnection")));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("PostDbConnection")));
 #endregion
 
 #region SnowflakeId Generator Configuration
