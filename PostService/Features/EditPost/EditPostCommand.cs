@@ -1,5 +1,6 @@
 using System;
 using MediatR;
+using PostService.Behaviors;
 using PostService.Features.CreatePost;
 using PostService.Models;
 using Shared.Helpers;
@@ -7,9 +8,9 @@ using Shared.Helpers;
 namespace PostService.Features.EditPost;
 
 public record EditPostCommand(
-    Guid PostId,
+    string PostId,
     string? Content,
     VisibilityType? Visibility,
     List<MediaInput>? Media,
     List<MentionInput>? Mentions,
-    string RowVersion) : IRequest<Response<EditPostCommandResponse>>;
+    string RowVersion) : IRequest<Response<EditPostCommandResponse>> , ITransactionCommand;
