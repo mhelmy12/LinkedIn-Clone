@@ -32,6 +32,7 @@ public class Post
     public DateTime? UpdatedAt { get; set; } = null;
 
     public bool IsDeleted { get; set; } = false;
+    public byte[]? RowVersion { get; set; }
 
     public ICollection<PostMedia> Media { get; set; } = new List<PostMedia>();
     public ICollection<PostMention> Mentions { get; set; } = new List<PostMention>();

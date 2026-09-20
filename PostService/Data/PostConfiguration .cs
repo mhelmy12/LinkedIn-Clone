@@ -34,6 +34,10 @@ public class PostConfiguration : IEntityTypeConfiguration<Post>
         builder.Property(p => p.IsDeleted)
             .HasDefaultValue(false);
 
+        builder.Property(p => p.RowVersion)
+            .IsRowVersion()
+            .IsConcurrencyToken();
+
         // Relationships
         builder.HasMany(p => p.Media)
             .WithOne(m => m.Post)
