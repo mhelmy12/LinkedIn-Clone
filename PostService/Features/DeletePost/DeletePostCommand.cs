@@ -1,7 +1,10 @@
 using System;
 using MediatR;
+using PostService.Behaviors;
 using Shared.Helpers;
 
 namespace PostService.Features.DeletePost;
 
-public record DeletePostCommand() : IRequest<Response<DeletePostCommandResponse>>;
+public record DeletePostCommand(
+    string PostId
+) : IRequest<Response<DeletePostCommandResponse>>, ITransactionCommand;
