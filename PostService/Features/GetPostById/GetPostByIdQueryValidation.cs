@@ -7,7 +7,8 @@ public class GetPostByIdQueryValidation : AbstractValidator<GetPostByIdQuery>
 {
     public GetPostByIdQueryValidation()
     {
-
+        RuleFor(x => x.PostId)
+            .GreaterThan(0)
+            .WithMessage("Post id must be greater than zero.");
     }
-
 }

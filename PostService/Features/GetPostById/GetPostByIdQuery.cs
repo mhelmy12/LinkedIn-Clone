@@ -4,4 +4,4 @@ using Shared.Helpers;
 
 namespace PostService.Features.GetPostById;
 
-public record GetPostByIdQuery() : IRequest<Response<GetPostByIdQueryResponse>>;
+public record GetPostByIdQuery(long PostId) : IRequest<Response<GetPostByIdQueryResponse>>;
