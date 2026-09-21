@@ -43,13 +43,6 @@ public class DeletePostCommandHandler(
         if (post.AuthorId != currentUser)
             return Unauthorized<DeletePostCommandResponse>("You can only delete your own posts.");
 
-        // ─── 4. ReposterIds (projection) ───
-        var reposterIds = await _db.PostReposts
-            .AsNoTracking()
-            .Where(r => r.OriginalPostId == postId)
-            .Select(r => r.UserId)
-            .ToListAsync(ct);
-
         var now = DateTime.Now;
 
         // ─── 5. Soft delete for Post (bulk UPDATE) ───
@@ -63,16 +56,11 @@ public class DeletePostCommandHandler(
         if (affected == 0)
             return NotFound<DeletePostCommandResponse>("Post not found.");
 
-        // ─── 7. Hard delete for PostReposts (bulk DELETE) ───
-        await _db.PostReposts
-            .Where(r => r.OriginalPostId == postId)
-            .ExecuteDeleteAsync(ct);
 
-        // ─── 8. Outbox Event ───
+        // ─── 6. Outbox Event ───
         var @event = new PostDeletedEvent(
             PostId: postId.ToString(),
             AuthorId: post.AuthorId,
-            RepostedByUserIds: reposterIds,
             DeletedAt: now);
 
         var postDeletedEventJson = JsonSerializer.Serialize(@event);
@@ -90,9 +78,9 @@ public class DeletePostCommandHandler(
         _db.OutboxMessages.Add(outboxMessage);
 
         _logger.LogInformation(
-            "Post {PostId} deleted by {AuthorId} , reposts: {Reposts})",
-            post.Id, post.AuthorId,
-            reposterIds.Count);
+            "Post {PostId} deleted by {AuthorId}",
+            post.Id, post.AuthorId
+            );
 
         return Success<DeletePostCommandResponse>(new(), "Post deleted successfully.");
     }

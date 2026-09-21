@@ -15,7 +15,6 @@ public class PostDbContext : DbContext
     public DbSet<PostMedia> PostMedia { get; set; }
     public DbSet<PostHashtag> PostHashtags { get; set; }
 
-    public DbSet<PostRepost> PostReposts { get; set; }
 
     public DbSet<OutboxMessage> OutboxMessages { get; set; }
 
