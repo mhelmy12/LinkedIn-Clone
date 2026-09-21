@@ -9,7 +9,7 @@ public record PostCreatedEvent(
     string AuthorId,
     string? Content,
     VisibilityType Visibility,
-    long? QuotedPostId,
+    long? RepostOfPostId,
     IReadOnlyList<string>? MentionedUserIds,
     IReadOnlyList<string>? Hashtags,
     DateTime CreatedAt);

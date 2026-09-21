@@ -12,7 +12,7 @@ public record MediaItemDto(string MediaKey, MediaType Type, int DisplayOrder);
 public record CreatePostCommand(
     string? Content,
     VisibilityType Visibility,
-    long? QuotedPostId,
+    long? RepostOfPostId,
     List<MediaInput>? Media,
     List<MentionInput>? Mentions) : IRequest<Response<CreatePostCommandResponse>>, ITransactionCommand;
 

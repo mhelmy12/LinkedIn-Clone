@@ -31,13 +31,13 @@ public class CreatePostCommandHandler(
         var postId = long.Parse(_snowflakeIdGenerator.Generate());
         var now = DateTime.Now;
 
-        if (request.QuotedPostId.HasValue)
+        if (request.RepostOfPostId.HasValue)
         {
             var originalExists = await _dbContext.Posts
-                .AnyAsync(p => p.Id == request.QuotedPostId.Value, cancellationToken);
+                .AnyAsync(p => p.Id == request.RepostOfPostId.Value, cancellationToken);
 
             if (!originalExists)
-                return NotFound<CreatePostCommandResponse>("Quoted post not found.");
+                return NotFound<CreatePostCommandResponse>("Repost not found.");
         }
 
 
@@ -49,9 +49,9 @@ public class CreatePostCommandHandler(
             AuthorId = currentUserId,
             Content = request.Content?.Trim(),
             Visibility = request.Visibility,
-            QuotedPostId = request.QuotedPostId,
+            RepostOfPostId = request.RepostOfPostId,
             CreatedAt = now,
-            Type = request.QuotedPostId.HasValue ? PostType.Quote : PostType.Original,
+            Type = request.RepostOfPostId.HasValue ? PostType.Quote : PostType.Original,
         };
 
         if (request.Mentions != null)
@@ -95,7 +95,7 @@ public class CreatePostCommandHandler(
           AuthorId: post.AuthorId,
           Content: post.Content,
           Visibility: post.Visibility,
-          QuotedPostId: post.QuotedPostId,
+          RepostOfPostId: post.RepostOfPostId,
           MentionedUserIds: request.Mentions is null ? null : request.Mentions.Select(m => m.MentionedUserId).ToList(),
           Hashtags: normalizedHashtags,
           CreatedAt: now);

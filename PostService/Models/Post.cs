@@ -21,7 +21,7 @@ public class Post
 
     public PostType Type { get; set; }
 
-    public long? QuotedPostId { get; set; }
+    public long? RepostOfPostId { get; set; }
 
     public VisibilityType Visibility { get; set; } = VisibilityType.Public;
 

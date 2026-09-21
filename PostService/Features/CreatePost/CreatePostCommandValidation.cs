@@ -18,7 +18,7 @@ public class CreatePostCommandValidation : AbstractValidator<CreatePostCommand>
             .WithMessage("Post must have content or at least one media item.");
 
         RuleFor(x => x)
-            .Must(x => x.QuotedPostId is null || !string.IsNullOrWhiteSpace(x.Content))
+            .Must(x => x.RepostOfPostId is null || !string.IsNullOrWhiteSpace(x.Content))
             .WithMessage("Quote repost must include content.");
 
         RuleFor(x => x.Media)

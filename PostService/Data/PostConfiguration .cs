@@ -23,7 +23,7 @@ public class PostConfiguration : IEntityTypeConfiguration<Post>
             .HasConversion<int>()
             .IsRequired();
 
-        builder.Property(p => p.QuotedPostId)
+        builder.Property(p => p.RepostOfPostId)
             .IsRequired(false);
 
         builder.Property(p => p.CreatedAt)
@@ -52,13 +52,13 @@ public class PostConfiguration : IEntityTypeConfiguration<Post>
 
         builder.HasOne<Post>()
             .WithMany()
-            .HasForeignKey(p => p.QuotedPostId)
+            .HasForeignKey(p => p.RepostOfPostId)
             .OnDelete(DeleteBehavior.Restrict);
 
         // Indexes
         builder.HasIndex(p => p.AuthorId);
         builder.HasIndex(p => p.CreatedAt);
-        builder.HasIndex(p => p.QuotedPostId);
+        builder.HasIndex(p => p.RepostOfPostId);
 
         // Soft Delete Query Filter
         builder.HasQueryFilter(p => p.IsDeleted == false);
