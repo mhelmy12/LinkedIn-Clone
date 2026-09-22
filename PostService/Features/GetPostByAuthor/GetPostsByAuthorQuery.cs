@@ -6,6 +6,6 @@ namespace PostService.Features.GetPostByAuthor;
 
 
 public record GetPostsByAuthorQuery(
-    long AuthorId,
+    string AuthorId,
     string? Cursor,
     int Limit) : IRequest<Response<GetPostsByAuthorQueryResponse>>;
