@@ -4,7 +4,7 @@ using MediatR;
 
 namespace PostService.Features.GetPostByAuthor;
 
-public class GetPostByAuthorQueryEndpoint : ICarterModule
+public class GetPostsByAuthorQueryEndpoint : ICarterModule
 {
     public void AddRoutes(IEndpointRouteBuilder app)
     {
