@@ -64,6 +64,7 @@ public enum StatusType
 public enum PostType
 {
     Original,
+    PureRepost,
     Quote,
     Article,
     Poll
