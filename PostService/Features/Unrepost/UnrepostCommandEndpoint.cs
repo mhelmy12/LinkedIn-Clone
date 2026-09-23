@@ -2,9 +2,9 @@ using System;
 using Carter;
 using MediatR;
 
-namespace PostService.Features.DeleteSimpleRepost;
+namespace PostService.Features.Unrepost;
 
-public class DeleteSimpleRepostCommandEndpoint : ICarterModule
+public class UnrepostCommandEndpoint : ICarterModule
 {
     public void AddRoutes(IEndpointRouteBuilder app)
     {
