@@ -17,6 +17,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MediaService", "MediaServic
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PostService", "PostService\PostService.csproj", "{1E6D88C5-1547-4E47-8E42-9909D81D6673}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EngagementService", "EngagementService\EngagementService.csproj", "{B903C268-3A58-4ECB-AA18-DF035739C991}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -111,6 +113,18 @@ Global
 		{1E6D88C5-1547-4E47-8E42-9909D81D6673}.Release|x64.Build.0 = Release|Any CPU
 		{1E6D88C5-1547-4E47-8E42-9909D81D6673}.Release|x86.ActiveCfg = Release|Any CPU
 		{1E6D88C5-1547-4E47-8E42-9909D81D6673}.Release|x86.Build.0 = Release|Any CPU
+		{B903C268-3A58-4ECB-AA18-DF035739C991}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B903C268-3A58-4ECB-AA18-DF035739C991}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B903C268-3A58-4ECB-AA18-DF035739C991}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{B903C268-3A58-4ECB-AA18-DF035739C991}.Debug|x64.Build.0 = Debug|Any CPU
+		{B903C268-3A58-4ECB-AA18-DF035739C991}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{B903C268-3A58-4ECB-AA18-DF035739C991}.Debug|x86.Build.0 = Debug|Any CPU
+		{B903C268-3A58-4ECB-AA18-DF035739C991}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B903C268-3A58-4ECB-AA18-DF035739C991}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B903C268-3A58-4ECB-AA18-DF035739C991}.Release|x64.ActiveCfg = Release|Any CPU
+		{B903C268-3A58-4ECB-AA18-DF035739C991}.Release|x64.Build.0 = Release|Any CPU
+		{B903C268-3A58-4ECB-AA18-DF035739C991}.Release|x86.ActiveCfg = Release|Any CPU
+		{B903C268-3A58-4ECB-AA18-DF035739C991}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
