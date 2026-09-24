@@ -46,7 +46,7 @@ flowchart LR
     Debezium --> Kafka
     Search --> Elasticsearch[(Elasticsearch)]
 
-    Keycloak --> KeycloakDB[(Keycloak PostgreSQL Database)]
+    Keycloak --> KeycloakDB[(Keycloak SQL Server Database)]
 ```
 
 ### Main data flow
