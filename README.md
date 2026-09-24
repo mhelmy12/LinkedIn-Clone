@@ -1,374 +1,729 @@
-A distributed backend for a LinkedIn-style social platform, built with ASP.NET Core and .NET Aspire. The system is split into focused services for identity, users, posts, engagement, feeds, search, media, and API composition.
-A distributed backend for a LinkedIn-style social platform, built with ASP.NET Core and .NET Aspire. The system is split into focused services for identity, users, posts, engagement, feeds, search, media, and API composition.
+# LinkedIn Clone — Distributed Backend
+
+A distributed backend for a LinkedIn-style social platform, built with **ASP.NET Core** and **.NET Aspire**.
+
+The system is split into focused services for identity, users, posts, engagement, feeds, search, media, and API composition.
 
 The main goal of this project is not only to reproduce social-network features, but also to demonstrate the architectural decisions required when a modular monolith grows into independently deployable services.
 
+---
+
 ## Why This Project
 
-This project is designed around a few practical principles:
+The architecture is built around several practical principles:
 
 - Keep identity and application profile data separate.
 - Give each business capability a clear ownership boundary.
 - Use synchronous APIs for immediate request/response operations.
-- Use events for propagation, indexing, integration, and background work.
+- Use events for state propagation, indexing, integration, and background processing.
 - Keep binary media outside relational databases and application servers.
-- Choose infrastructure that can support horizontal scaling without hiding the operational trade-offs.
-- Prefer read models that match the query shape over joins that cross service boundaries.
+- Support horizontal scaling without hiding operational trade-offs.
+- Prefer read models that match query patterns instead of cross-service joins.
+- Keep each service responsible for its own data and database schema.
 
-## Architecture
+---
+
+# Architecture
 
 ```mermaid
 flowchart LR
     Client[Web or Mobile Client] --> Gateway[API Gateway\nYARP]
+
     Gateway --> Keycloak[Keycloak\nOIDC / OAuth 2.0]
     Gateway --> User[User Service]
     Gateway --> Post[Post Service]
-    Gateway --> Engagement[Engagement Service]
     Gateway --> Engagement[Engagement Service]
     Gateway --> Feed[Feed Service]
     Gateway --> Media[Media Service]
     Gateway --> Search[Search Service]
 
-    User --> UserDB[(User SQL Server Database)]
-    Post --> PostDB[(Post SQL Server Database)]
-    Engagement --> EngagementDB[(Engagement PostgreSQL Database)]
-    Feed --> FeedDB[(Feed SQL Server Database)]
+    User --> UserDB[(User SQL Server DB)]
+    Post --> PostDB[(Post SQL Server DB)]
+    Engagement --> EngagementDB[(Engagement PostgreSQL DB)]
+    Feed --> FeedDB[(Feed SQL Server DB)]
     Feed --> Redis[(Redis)]
-    Media --> MinIO[(MinIO\nS3-compatible object storage)]
+    Media --> MinIO[(MinIO\nS3-compatible storage)]
 
     User --> Kafka[(Apache Kafka)]
     Post --> Kafka
     Engagement --> Kafka
-    Engagement --> Kafka
+
     Kafka --> Feed
     Kafka --> Search
     Kafka --> Debezium[Debezium Kafka Connect]
     Debezium --> Kafka
+
     Search --> Elasticsearch[(Elasticsearch)]
 
-    Keycloak --> KeycloakDB[(Keycloak SQL Server Database)]
+    Keycloak --> KeycloakDB[(Keycloak SQL Server DB)]
 ```
 
-### Main data flow
+## Main Data Flow
 
-1. A client authenticates through Keycloak using OpenID Connect.
-2. The API Gateway validates the session and forwards requests to the appropriate service.
-3. Most services persist transactional data in their own SQL Server databases, while Engagement Service uses PostgreSQL for its own domain data using EF Core migrations.
-4. Important changes are written to an outbox and published through Kafka using Debezium.
-5. Post and Engagement services emit their own events independently of one another.
-6. Feed Service consumes post, reaction, and comment events from the Engagement stream, maintains Redis-backed feeds, and materializes counters close to the read path.
-7. Post and Engagement services emit their own events independently of one another.
-8. Feed Service consumes post, reaction, and comment events from the Engagement stream, maintains Redis-backed feeds, and materializes counters close to the read path.
-9. Search Service consumes user, post, and comment events and maintains Elasticsearch read models.
-10. Media Service generates short-lived presigned URLs so clients upload and download files directly from MinIO.
+1. A client authenticates through **Keycloak** using OpenID Connect.
+2. The **API Gateway** handles routing and authentication integration before forwarding requests to the appropriate service.
+3. Each service persists data in its own database. Most services use SQL Server, while Engagement Service uses PostgreSQL.
+4. Important domain changes are written to an **outbox table** within the same transaction as the business data.
+5. **Debezium** captures committed outbox records through CDC and publishes them to Kafka.
+6. Each service publishes events for changes within its own bounded context.
+7. **Feed Service** consumes post, connection, reaction, and comment events to maintain Redis-backed feeds and counter read models.
+8. **Search Service** consumes user, post, and comment events to maintain Elasticsearch read models.
+9. **Media Service** generates short-lived presigned URLs so clients can upload and download files directly from MinIO.
+10. Downstream services never read another service's database directly.
 
-## Service Responsibilities
+---
 
-Each service owns its database schema and exposes data through APIs or events. No service reads another service's tables directly.
+# Service Responsibilities
 
-**User Service** owns profiles, connections, experience, education, and the social graph. It reacts to Keycloak CDC events to provision users and publishes profile events that other services consume as projections.
+Each service owns its database schema and exposes data through APIs or events.
 
-**Post Service** owns posts, media references, mentions, hashtags, and reposts. It treats reposts as first-class posts so downstream services never need to understand the difference between an original post and a repost.
+### User Service
 
-**Engagement Service** owns reactions, comments, and replies. It publishes reaction and comment events, keeps the validation and persistence rules for engagement content in one place, and never mutates counters in Post Service directly — the counter model lives in Feed Service and is updated from events.
-**Engagement Service** owns reactions, comments, and replies. It publishes reaction and comment events, keeps the validation and persistence rules for engagement content in one place, and never mutates counters in Post Service directly — the counter model lives in Feed Service and is updated from events.
+Owns:
 
-**Feed Service** owns feed entries, Redis-backed sorted sets per user, and the counter read model for posts. It is the fastest path for anything the client renders in a timeline.
+- User profiles
+- Connections
+- Experience
+- Education
+- Social graph data
 
-**Search Service** owns Elasticsearch indexes and consumes user, post, and comment events to maintain searchable read models.
+It also reacts to Keycloak CDC events to provision application-level users and publishes profile and connection events consumed by other services.
 
-**Media Service** owns presigned URL generation and access policy for MinIO. It never streams binary data through the gateway.
+### Post Service
 
-## Events
+Owns:
 
-Everything that changes state across services happens through events. A service writes to its own database and, in the same transaction, appends an event to its outbox table. Debezium captures that row through CDC and publishes it to Kafka. Downstream services consume the event and update their own read models.
+- Posts
+- Reposts
+- Mentions
+- Hashtags
+- Media references
+- Post visibility
 
-This is the only mechanism by which data crosses service boundaries. No service calls another to "notify" it of a change, and no service reads another service's tables.
+Reposts are represented as first-class posts so downstream services do not need separate logic for original posts versus reposts.
 
-The events below are grouped by the service that publishes them.
+### Engagement Service
 
-### User Service Events
+Owns:
 
-**`UserProvisioned`** is published when a new user is first observed through Keycloak CDC. It carries the internal user id, Keycloak id, username, display name, email, and creation timestamp. Feed Service and Post Service use it to seed their local user projections.
+- Reactions
+- Comments
+- Replies
+- Engagement-related mentions
 
-**`UserProfileUpdated`** is published when a user changes their display name, profile image, or headline. It carries the user id and the new profile fields. Post Service, Feed Service, Engagement Service, and Search Service all consume it to keep their user summary projections current.
-**`UserProfileUpdated`** is published when a user changes their display name, profile image, or headline. It carries the user id and the new profile fields. Post Service, Feed Service, Engagement Service, and Search Service all consume it to keep their user summary projections current.
+It owns validation and persistence rules for engagement operations and publishes events consumed by Feed, Search, and future Notification services.
 
-**`ConnectionRequestSent`** is published when a user sends a connection request. Feed Service consumes it as a signal for potential feed expansion, and future graph projections consume it to update the connection graph.
+Engagement Service does **not** directly update counters in Post Service. Counter read models are maintained by Feed Service from events.
 
-**`ConnectionAccepted`** is published when a connection request is accepted. Feed Service uses it to start including the newly connected user's posts in the recipient's feed. Graph projections update the connection edge.
+### Feed Service
 
-**`ConnectionRemoved`** is published when a connection is removed on either side. Feed Service removes the corresponding posts from the affected feeds, and graph projections remove the edge.
+Owns:
 
-### Post Service Events
+- Feed entries
+- Redis-backed user feeds
+- Post counter read models
 
-**`PostCreated`** is published for every new post, including pure reposts and quote reposts. It carries the post id, author id, content, visibility, an optional `RepostOfPostId`, mentioned user ids, hashtags, and creation timestamp. Feed Service uses it to fan out to followers and update counters. Search Service indexes it. Notification Service uses it to notify mentioned users.
+It is optimized for low-latency timeline reads and can scale independently from transactional write services.
 
-**`PostUpdated`** is published when an existing post is edited. It carries the same shape as `PostCreated` plus the previous mentioned user ids and a set of change flags. The change flags let consumers decide whether the event is relevant to them: Search Service only re-indexes when content or hashtags change, and Notification Service only notifies newly mentioned users.
+### Search Service
 
-**`PostDeleted`** is published when a post is soft-deleted. It carries the post id, author id, and deletion timestamp. Feed Service removes the post from all affected feeds in Redis. Search Service removes the document from its index. Notification Service marks related notifications as stale.
+Owns:
 
-### Engagement Service Events
+- Elasticsearch indexes
+- Search-specific read models
 
-### Engagement Service Events
+It consumes events from User, Post, and Engagement services and maintains denormalized documents optimized for search queries.
 
-**`ReactionAdded`** is published when a user reacts to a post or comment. It carries the reaction id, target type (post or comment), target id, user id, reaction type, and timestamp. Feed Service increments the appropriate counter in Redis. Notification Service notifies the target author when the reactor is not the author.
+### Media Service
 
-**`ReactionChanged`** is published when a user changes their reaction type on the same target (for example, from Like to Love). It carries the same fields as `ReactionAdded` plus the previous reaction type. Feed Service does not change counters because the count is unchanged; Notification Service may or may not act on it depending on product rules.
+Owns:
 
-**`ReactionRemoved`** is published when a user removes their reaction. It carries the reaction id, target, user id, and timestamp. Feed Service decrements the counter.
+- Media upload/download policies
+- Presigned URL generation
+- MinIO access
 
-**`CommentCreated`** is published when a user posts a comment or reply. It carries the comment id, post id, author id, parent comment id (for replies), content, mentioned user ids, and timestamp. Feed Service increments the post's comment counter. Search Service indexes comment content if comment search is enabled. Notification Service notifies the post author and any mentioned users.
+Binary files are transferred directly between clients and object storage rather than through the API Gateway.
 
-**`CommentUpdated`** is published when a comment is edited. It carries the same shape plus the previous mentioned user ids. Notification Service notifies newly mentioned users only.
+---
 
-**`CommentDeleted`** is published when a comment is removed. It carries the comment id, post id, author id, and deletion timestamp. Feed Service decrements the counter, and Search Service removes the document.
+# Event-Driven Architecture
 
-### Media Service Events
+Cross-service **state propagation** is event-driven.
 
-**`MediaUploaded`** is published when a client confirms that an upload to MinIO completed. It carries the object key, content type, size, and owner id. This event is mostly used for auditing and cleanup of orphaned objects.
+A service writes its business data and the corresponding event to an outbox table in the same database transaction.
 
-**`MediaDeleted`** is published when an object is removed from MinIO. Post Service and Engagement Service treat missing media as an empty reference rather than an error.
-**`MediaDeleted`** is published when an object is removed from MinIO. Post Service and Engagement Service treat missing media as an empty reference rather than an error.
+Debezium captures the committed outbox record and publishes it to Kafka.
 
-### Feed Service Events
+```text
+Business Operation
+       │
+       ▼
+Service Database
+       │
+       ├── Business Data
+       │
+       └── Outbox Message
+                │
+                ▼
+             Debezium
+                │
+                ▼
+              Kafka
+                │
+       ┌────────┼─────────┐
+       ▼        ▼         ▼
+     Feed     Search   Other Consumers
+```
 
-Feed Service is primarily a consumer. It publishes very little of its own. When it does emit an event, it is typically a maintenance signal rather than a domain fact. For example, a future `FeedRebuildRequested` event would let operators trigger a targeted rebuild of a user's feed without touching Post or Engagement services.
-Feed Service is primarily a consumer. It publishes very little of its own. When it does emit an event, it is typically a maintenance signal rather than a domain fact. For example, a future `FeedRebuildRequested` event would let operators trigger a targeted rebuild of a user's feed without touching Post or Engagement services.
+This provides reliable propagation without requiring the source service to synchronously call every downstream consumer.
 
-### Search Service Events
+> The outbox contains application-level business events. Debezium is responsible for reliably transporting committed outbox records to Kafka; it is not a replacement for domain-event design.
 
-Search Service does not publish domain events. It owns read models only and can be rebuilt from the events produced by other services. If Search Service needs to signal that an index rebuild is complete, that signal is operational, not domain.
+---
 
-## Event Naming and Topics
+# Events
 
-Every outbox row becomes a Kafka message on the topic corresponding to the service that produced it. The topic prefix is the service name, and the table name is the outbox table for that service.
+## User Service Events
 
-For example, the Post Service writes to `postService.dbo.OutboxMessages`. Debezium tails that table and publishes to a Kafka topic named `postService.dbo.OutboxMessages`. Every consumer that wants post events subscribes to that topic with a distinct consumer group id.
+### `UserProvisioned`
 
-Consumer group ids follow the pattern `<service-name>-<purpose>`. Feed Service consumes post events under the group `feed-service-posts`, and Search Service consumes them under `search-service-posts`. Each group has its own offset, so neither service is affected by the other's processing speed.
+Published when a new application user is provisioned from Keycloak.
 
-## Idempotency
+Contains:
 
-Kafka and Debezium together give at-least-once delivery. Every consumer must therefore be idempotent. The patterns used in this project are:
+- Internal user ID
+- Keycloak ID
+- Username
+- Display name
+- Email
+- Creation timestamp
 
-- Unique constraints on natural keys, so repeated inserts fail silently or upsert.
-- Deduplication keys derived from the event id, so replays are no-ops.
-- Redis operations designed to be idempotent, such as `ZADD` with the same score and `HSET` with an absolute value rather than an increment when the increment would double-count.
+Consumed by services that maintain local user projections.
 
-When a consumer cannot make an operation idempotent — for example, an external email — the operation is moved behind a separate deduplication layer, such as an inbox table with a unique message id.
+### `UserProfileUpdated`
 
-## Event Versioning
+Published when profile information changes.
 
-Events are contracts between services. Once a consumer depends on a field, removing it or changing its meaning breaks the consumer silently. The project follows two rules:
+Contains:
 
-Fields are added, not removed. If a field must be removed, it is deprecated first and removed only after every consumer has stopped reading it.
+- User ID
+- Display name
+- Profile image
+- Headline
 
-A new event version is introduced only for incompatible changes. Incompatible changes are rare, and when they happen they are published as a new event type rather than mutating the existing one. Consumers that still need the old type keep consuming it until they are upgraded.
+Consumed by Post, Feed, Engagement, and Search services.
 
-## Technology Stack
+### `ConnectionRequestSent`
 
-| Area                 | Technology                                | Responsibility                                                                 |
-| -------------------- | ----------------------------------------- | ------------------------------------------------------------------------------ |
-| Runtime              | .NET 9 / ASP.NET Core                     | Service implementation and HTTP APIs                                           |
-| Orchestration        | .NET Aspire                               | Local distributed application orchestration and service discovery              |
-| Edge                 | YARP API Gateway                          | Routing, authentication integration, rate limiting, and request composition    |
-| Identity             | Keycloak                                  | OIDC/OAuth 2.0, users, roles, sessions, and tokens                             |
-| Relational data      | SQL Server + PostgreSQL (Engagement only) | Core service data is on SQL Server; Engagement Service uses PostgreSQL         |
-| Graph data (planned) | Neo4j or JanusGraph                       | Connection graph traversal and mutual-connection queries                       |
-| ORM                  | Entity Framework Core                     | Persistence, migrations, and transaction handling                              |
-| Messaging            | Apache Kafka                              | Durable event streaming between services                                       |
-| Change data capture  | Debezium                                  | Capturing database changes without coupling every integration to business code |
-| Cache and hot state  | Redis                                     | Distributed cache, feed sorted sets, and counter read models                   |
-| Search               | Elasticsearch                             | Full-text and profile/post/comment search read models                          |
-| Object storage       | MinIO                                     | S3-compatible storage for profile and post media                               |
-| API style            | Carter / OpenAPI                          | Lightweight endpoint modules and API documentation                             |
+Published when a connection request is created.
 
-## Technology Decisions
+### `ConnectionAccepted`
 
-### Why Keycloak instead of ASP.NET Core Identity?
+Published when a connection request is accepted.
 
-We chose Keycloak because identity is a platform capability in this architecture, not a feature that should be reimplemented inside the User Service.
+Feed and graph projections can use this event to expand the recipient's feed and update connection relationships.
 
-| Keycloak                                                                            | ASP.NET Core Identity                                                                    |
-| ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| Dedicated identity server with OIDC and OAuth 2.0 built in                          | Identity is embedded in an application and usually needs extra hosting and protocol work |
-| Centralized realm, client, role, session, and token management                      | More control inside the .NET codebase, but more responsibility for the team              |
-| Works well when multiple services or future clients need the same identity provider | Excellent for a single ASP.NET application or a tightly integrated identity database     |
-| Realm export/import makes local environments reproducible                           | Usually requires custom administration and migration workflows                           |
-| Keycloak                                                                            | ASP.NET Core Identity                                                                    |
-| ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| Dedicated identity server with OIDC and OAuth 2.0 built in                          | Identity is embedded in an application and usually needs extra hosting and protocol work |
-| Centralized realm, client, role, session, and token management                      | More control inside the .NET codebase, but more responsibility for the team              |
-| Works well when multiple services or future clients need the same identity provider | Excellent for a single ASP.NET application or a tightly integrated identity database     |
-| Realm export/import makes local environments reproducible                           | Usually requires custom administration and migration workflows                           |
+### `ConnectionRemoved`
 
-ASP.NET Core Identity would be a valid choice for a modular monolith. Keycloak is a better fit here because it keeps authentication concerns outside business services and gives future web, mobile, and third-party clients a standard protocol boundary.
+Published when an existing connection is removed.
 
-### Why not Auth0?
+Consumers remove or update the corresponding relationship in their read models.
 
-Auth0 is a strong managed option and can reduce operational work. Keycloak was selected here because it is self-hosted, open source, locally reproducible, and gives the project control over data location, realm configuration, and development costs. Auth0 may be preferable when the priority is minimizing identity infrastructure operations rather than retaining self-hosting control.
+---
 
-### Why Kafka instead of RabbitMQ?
+## Post Service Events
 
-Kafka is used because the project treats events as a durable stream that can be replayed by new consumers, not only as transient work items.
+### `PostCreated`
 
-| Kafka                                                                 | RabbitMQ                                                              |
-| --------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| Durable append-only log with replayable history                       | Message broker optimized for queues and routing                       |
-| Multiple consumer groups can independently read the same event stream | Excellent for work distribution and task-oriented messaging           |
-| High throughput and natural partitioning by aggregate key             | Rich exchange, routing-key, and per-message delivery semantics        |
-| A good foundation for search projections, feed fan-out, and CDC       | Often the simpler choice for commands, jobs, and low-volume workflows |
-| Kafka                                                                 | RabbitMQ                                                              |
-| --------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| Durable append-only log with replayable history                       | Message broker optimized for queues and routing                       |
-| Multiple consumer groups can independently read the same event stream | Excellent for work distribution and task-oriented messaging           |
-| High throughput and natural partitioning by aggregate key             | Rich exchange, routing-key, and per-message delivery semantics        |
-| A good foundation for search projections, feed fan-out, and CDC       | Often the simpler choice for commands, jobs, and low-volume workflows |
+Published for every new post, including original posts, pure reposts, and quote reposts.
 
-For this system, Kafka also provides the event backbone required by Debezium and allows Feed and Search services to rebuild projections. RabbitMQ would be a reasonable alternative for background jobs, but Kafka better matches the event-streaming direction of this project.
+Contains:
 
-### Why Debezium?
+- Post ID
+- Author ID
+- Content
+- Visibility
+- Optional `RepostOfPostId`
+- Mentioned user IDs
+- Hashtags
+- Creation timestamp
 
-Application events describe business intent; database changes describe committed state. Debezium captures committed row-level changes from the source databases through CDC and publishes them to Kafka, with Engagement Service using PostgreSQL while the remaining services continue on SQL Server.
+Feed Service uses it for fan-out, while Search Service uses it for indexing.
 
-This gives us:
+### `PostUpdated`
 
-- Reliable propagation of changes after a database transaction commits.
-- Less coupling between a database-owning service and every downstream consumer.
-- The ability to bootstrap or rebuild downstream projections from change events.
-- A standard CDC pipeline that can later serve analytics, auditing, or integrations.
+Published when an existing post is edited.
 
-Debezium is not a replacement for business events. Domain events should still be produced when consumers need business meaning. CDC is most useful when consumers need an accurate stream of persisted changes.
+The event includes the updated post information, previous mentions, and change flags so consumers can determine whether the update is relevant to them.
 
-### Why Elasticsearch instead of searching directly in SQL Server or PostgreSQL?
+### `PostDeleted`
 
-Elasticsearch is a dedicated read model for search-heavy workloads:
+Published when a post is soft-deleted.
 
-- Full-text search, analyzed fields, relevance scoring, and filtering.
-- Independent scaling of search workloads from transactional writes.
-- Denormalized documents optimized for the query shape of profiles, posts, and comments.
-- Event-driven updates without making every search query join multiple service databases.
+Consumers remove or invalidate the corresponding read models.
 
-The transactional databases remain the source of truth. Elasticsearch can be rebuilt from Kafka events, so search availability and indexing speed do not need to dictate the transactional schema.
+---
 
-### Why MinIO instead of storing files in the service databases?
+## Engagement Service Events
+
+### `ReactionAdded`
+
+Published when a user reacts to a post or comment.
+
+Contains:
+
+- Reaction ID
+- Target type
+- Target ID
+- User ID
+- Reaction type
+- Timestamp
+
+Feed Service updates the corresponding counter.
+
+### `ReactionChanged`
+
+Published when a user changes their existing reaction.
+
+The event includes both the previous and new reaction types.
+
+Because the total reaction count does not change, Feed Service does not increment or decrement the counter.
+
+### `ReactionRemoved`
+
+Published when a user removes a reaction.
+
+Feed Service decrements the corresponding counter.
+
+### `CommentCreated`
+
+Published when a user creates a comment or reply.
+
+Contains:
+
+- Comment ID
+- Post ID
+- Author ID
+- Optional parent comment ID
+- Content
+- Mentioned user IDs
+- Timestamp
+
+Feed Service updates the post's comment counter, while Search Service can index the comment content.
+
+### `CommentUpdated`
+
+Published when a comment is edited.
+
+Contains the updated content and previous mentions so downstream consumers can determine what changed.
+
+### `CommentDeleted`
+
+Published when a comment is removed.
+
+Consumers remove or invalidate the corresponding read models.
+
+---
+
+## Media Service Events
+
+### `MediaUploaded`
+
+Published after a client confirms that an upload to MinIO completed.
+
+Contains:
+
+- Object key
+- Content type
+- Size
+- Owner ID
+
+Primarily useful for auditing and orphaned-object cleanup.
+
+### `MediaDeleted`
+
+Published when an object is removed from MinIO.
+
+Consumers can remove stale media references or treat missing media as unavailable.
+
+---
+
+# Event Topics and Consumer Groups
+
+Each service writes events to its own outbox table.
+
+For example:
+
+```text
+postService.dbo.OutboxMessages
+```
+
+Debezium publishes the outbox records to the corresponding Kafka topic.
+
+Consumers use independent consumer groups:
+
+```text
+feed-service-posts
+search-service-posts
+```
+
+Each consumer group maintains its own offsets, allowing Feed and Search services to consume the same event stream independently.
+
+The general naming convention is:
+
+```text
+<service-name>-<purpose>
+```
+
+---
+
+# Idempotency
+
+Kafka and Debezium provide **at-least-once delivery**, so consumers must be idempotent.
+
+The project uses several patterns:
+
+- Unique constraints on natural keys.
+- Event IDs as deduplication keys.
+- Upserts for projection updates.
+- Absolute Redis writes where possible instead of unsafe increments.
+- Inbox/deduplication tables for operations that cannot naturally be made idempotent.
+
+For example, an external side effect such as sending an email should be protected by an inbox or deduplication mechanism keyed by the event ID.
+
+---
+
+# Event Versioning
+
+Events are contracts between services.
+
+The project follows two main rules:
+
+1. **Add fields instead of removing or changing existing fields.**
+2. Introduce a new event version only when a change is incompatible.
+
+Deprecated fields remain available until all consumers stop depending on them.
+
+For incompatible changes, a new event type/version is introduced while consumers migrate from the old contract.
+
+---
+
+# Technology Stack
+
+| Area | Technology | Responsibility |
+|---|---|---|
+| Runtime | .NET 9 / ASP.NET Core | Service implementation and HTTP APIs |
+| Orchestration | .NET Aspire | Local distributed application orchestration and service discovery |
+| Edge | YARP | Routing, authentication integration, rate limiting, and API composition |
+| Identity | Keycloak | OIDC/OAuth 2.0, users, roles, sessions, and tokens |
+| Relational Data | SQL Server | Primary transactional storage |
+| Engagement Database | PostgreSQL | Engagement Service transactional storage |
+| ORM | Entity Framework Core | Persistence, migrations, and transaction handling |
+| Messaging | Apache Kafka | Durable event streaming |
+| CDC | Debezium | Outbox change capture and Kafka publishing |
+| Cache / Hot State | Redis | Feed sorted sets and counter read models |
+| Search | Elasticsearch | Search indexes and read models |
+| Object Storage | MinIO | S3-compatible media storage |
+| API | Carter / OpenAPI | Lightweight endpoint modules and API documentation |
+
+---
+
+# Technology Decisions
+
+## Why Keycloak Instead of ASP.NET Core Identity?
+
+Keycloak was selected because identity is treated as a platform capability rather than business logic owned by User Service.
+
+| Keycloak | ASP.NET Core Identity |
+|---|---|
+| Dedicated identity server | Embedded application identity framework |
+| OIDC/OAuth 2.0 built in | Requires additional protocol and hosting decisions |
+| Centralized realm, client, role, session, and token management | Greater control inside the .NET application |
+| Works well across multiple services and clients | Excellent for a single ASP.NET application |
+| Realm export/import simplifies local environments | Usually requires custom administration and migration workflows |
+
+ASP.NET Core Identity would still be a valid choice for a modular monolith. Keycloak fits this architecture because authentication remains outside business services and follows standard identity protocols.
+
+## Why Not Auth0?
+
+Auth0 is a strong managed alternative and can reduce identity infrastructure operations.
+
+Keycloak was selected because it provides:
+
+- Self-hosting
+- Open-source software
+- Local reproducibility
+- Control over identity data and configuration
+- Lower infrastructure cost during development
+
+A managed provider such as Auth0 may be more appropriate when reducing identity infrastructure operations is the primary goal.
+
+---
+
+## Why Kafka Instead of RabbitMQ?
+
+Kafka is used because the project treats events as a durable stream rather than only transient work items.
+
+| Kafka | RabbitMQ |
+|---|---|
+| Durable append-only log | Queue-oriented message broker |
+| Replayable event history | Strong task/work distribution model |
+| Independent consumer groups | Rich routing and exchange model |
+| Natural partitioning | Flexible routing keys |
+| Strong fit for CDC and projections | Strong fit for commands and background jobs |
+
+Kafka also integrates naturally with the Debezium CDC pipeline and allows Feed and Search projections to be rebuilt from event history.
+
+RabbitMQ would still be a reasonable choice for task-oriented background processing.
+
+---
+
+## Why Debezium?
+
+Debezium is used to reliably move committed outbox records into Kafka.
+
+This provides:
+
+- Reliable propagation after database commits.
+- Reduced coupling between producers and consumers.
+- A standardized CDC pipeline.
+- The ability to support future auditing and integrations.
+
+Debezium should not be considered a replacement for domain events.
+
+The application still defines the business meaning of each event; Debezium handles reliable change capture and transport.
+
+---
+
+## Why Elasticsearch?
+
+Elasticsearch provides a dedicated read model for search-heavy workloads.
+
+It supports:
+
+- Full-text search
+- Relevance scoring
+- Analyzed fields
+- Filtering
+- Denormalized search documents
+- Independent scaling of search workloads
+
+Transactional databases remain the source of truth.
+
+Elasticsearch can be rebuilt from the event stream, so search-specific requirements do not dictate the transactional schema.
+
+---
+
+## Why MinIO?
 
 MinIO provides an S3-compatible object-storage boundary for images and other media.
 
-- Object storage is cheaper and more appropriate for large binary content than database rows.
-- Presigned URLs let clients transfer files directly without streaming them through the API Gateway.
-- Media storage scales independently from user and post data.
-- S3 compatibility keeps the migration path open to AWS S3 or another object-storage provider.
+Benefits include:
 
-The Media Service owns URL generation and access policy; the application does not expose storage credentials to clients.
+- Suitable storage for large binary objects.
+- Direct client uploads/downloads using presigned URLs.
+- Independent scaling from transactional databases.
+- Compatibility with AWS S3 and other S3-compatible providers.
 
-### Why PostgreSQL specifically for Engagement Service?
+Media Service controls access and URL generation without exposing storage credentials to clients.
 
-Engagement data combines reactions, comments, mentions, and reply hierarchies in a way that benefits from PostgreSQL's transactional consistency, rich querying, and flexible relational model. The service keeps its own database schema and exposes data through APIs or events rather than allowing other services to query its tables directly.
+---
 
-The rest of the platform remains on SQL Server unless a service has a clear requirement for a different database technology.
+## Why Redis for Feeds and Counters?
 
-### Why Redis for feeds and counters?
+Feed reads are significantly more frequent than feed writes, so Feed Service maintains hot read models in Redis.
 
-Reactions and comments generate a high rate of counter updates that never need to be transactional. Feed Service keeps them in Redis hashes and sorted sets so reads never touch the database for hot data.
+Redis provides:
 
-- Sorted sets hold each user's feed with a stable ordering by creation time.
-- Atomic increments keep reaction and comment counts accurate under concurrency.
-- The read path for a timeline becomes a small Redis range query, not a join across Post, Reaction, and Comment databases.
+- Sorted sets for timeline ordering.
+- Hashes for counters and metadata.
+- Fast range queries.
+- Atomic operations for concurrent updates.
 
-Redis is not the source of truth. It can be rebuilt from Kafka events and the service databases if it fails.
+Redis is not the source of truth.
 
-### Why a dedicated Feed Service?
+If Redis is lost, the feed and counter models can be rebuilt from service data and events.
 
-Feed generation, fan-out, and counter maintenance have a different scaling profile from writes. Post and Engagement services care about correctness under writes. Feed Service cares about low-latency reads for every timeline request.
-Feed generation, fan-out, and counter maintenance have a different scaling profile from writes. Post and Engagement services care about correctness under writes. Feed Service cares about low-latency reads for every timeline request.
+---
 
-Splitting them means the read path can be scaled, cached, and eventually sharded independently of the write path.
+## Why a Dedicated Feed Service?
 
-### Why a single Engagement Service?
+Feed generation and counter maintenance have a different scaling profile from transactional writes.
 
-### Why a single Engagement Service?
+Post and Engagement services optimize for correct writes.
 
-Reactions and comments look different at the domain level, but they are part of the same engagement workflow on a post or comment. They share validation patterns, author-context rules, notification behavior, and counter updates, so consolidating them keeps ownership boundaries simpler without losing separation from the Post Service.
-Reactions and comments look different at the domain level, but they are part of the same engagement workflow on a post or comment. They share validation patterns, author-context rules, notification behavior, and counter updates, so consolidating them keeps ownership boundaries simpler without losing separation from the Post Service.
+Feed Service optimizes for low-latency timeline reads.
 
-A single Engagement Service makes it easier to reason about the activity model, consume a single event stream for feed counters, and evolve the schema for interactions without having to coordinate two independent services.
-A single Engagement Service makes it easier to reason about the activity model, consume a single event stream for feed counters, and evolve the schema for interactions without having to coordinate two independent services.
+Separating them allows the read path to scale independently and enables different strategies for:
 
-### Why .NET Aspire?
+- Fan-out
+- Caching
+- Sharding
+- Feed rebuilding
+- Counter materialization
 
-Aspire provides a code-first local topology for the services and infrastructure dependencies. It gives the team service discovery, dependency references, health visibility, logs, traces, and a dashboard without requiring every developer to manually coordinate ports and startup order.
+---
 
-Docker Compose remains available as a more portable infrastructure-only option. The two definitions should be kept aligned as the project evolves.
+## Why a Single Engagement Service?
 
-## Future Direction: Graph Database for Connections
+Reactions and comments are different entities, but they participate in the same engagement workflow.
 
-The connection graph is currently modeled in User Service using relational tables. This works well for direct connections, follow lists, and mutual-connection lookups at small scale.
+They share:
 
-As the graph grows, queries like "mutual connections between two users", "degrees of separation", and "friends of friends who liked this post" become expensive in a relational store. These are graph traversal problems, and they map naturally to a graph database such as Neo4j or JanusGraph.
+- Validation rules
+- Author/context checks
+- Counter updates
+- Notification behavior
+- Event-stream requirements
 
-The plan is not to replace User Service. It is to add a graph read model that is populated from the same connection events that already flow through Kafka.
+Keeping them together simplifies ownership and avoids unnecessary service boundaries while still separating engagement from Post Service.
 
-- User Service remains the source of truth for connections.
-- A graph projection service subscribes to `ConnectionCreated`, `ConnectionAccepted`, and `ConnectionRemoved` events.
-- The graph store answers traversal-heavy queries such as mutual connections and short-path discovery.
-- Feed and Search services can query the graph projection for "friends of friends" signals without touching User Service.
+---
 
-This keeps the write model stable and moves the graph workload to infrastructure that is designed for it. No service reads another service's tables, and the graph store is just another read model that can be rebuilt from events.
+## Why .NET Aspire?
 
-The decision to add it should be driven by measured query latency, not by anticipation.
+.NET Aspire provides a code-first local topology for the distributed application.
 
-## Database and Connection Pooling Roadmap
+It simplifies:
 
-The current local setup uses SQL Server for most service-owned data and PostgreSQL specifically for Engagement Service. Connection strings are supplied through configuration, and EF Core manages connections through the underlying ADO.NET pool.
+- Service discovery
+- Resource configuration
+- Dependency management
+- Health visibility
+- Logs
+- Traces
+- Local orchestration
 
-As the number of services and replicas grows, the database layer will eventually need a connection-management strategy that protects the platform from connection storms across both database engines. The planned direction is:
+Docker Compose remains available as an infrastructure-oriented alternative.
 
-- Use bounded connection pools per service and tune `Max Pool Size` deliberately.
-- Add a database proxy or pooler where the chosen engine supports it.
-- Apply timeouts, retry policies, circuit breakers, and health checks consistently.
-- Monitor active connections, pool exhaustion, query duration, and deadlocks.
-- Keep read-heavy workloads on dedicated read models such as Elasticsearch and Redis instead of opening more transactional connections.
+The two definitions should remain aligned as the project evolves.
 
-The exact future database or pooler choice should be driven by measured load and deployment constraints, not by adding a second database technology prematurely.
+---
 
-## Repository Structure
+# Future Direction: Graph Database
+
+Connections are currently stored relationally inside User Service.
+
+This works well for:
+
+- Direct connections
+- Connection lists
+- Basic relationship queries
+
+More complex queries such as:
+
+- Mutual connections
+- Friends of friends
+- Degrees of separation
+- Graph-based feed signals
+
+can become increasingly expensive in a relational database.
+
+The planned approach is to add a graph **read model**, rather than replacing User Service.
+
+```text
+User Service
+     │
+     │ Connection Events
+     ▼
+   Kafka
+     │
+     ▼
+Graph Projection
+     │
+     ▼
+Neo4j / JanusGraph
+```
+
+The responsibilities remain:
+
+- User Service remains the source of truth.
+- Connection events populate the graph projection.
+- The graph database handles traversal-heavy queries.
+- Feed and Search can consume graph-derived signals without querying User Service tables.
+
+The decision to introduce a graph database should be based on measured query requirements rather than anticipated scale.
+
+---
+
+# Database and Connection Pooling Roadmap
+
+The current local environment uses SQL Server for most services and PostgreSQL for Engagement Service.
+
+EF Core uses the underlying ADO.NET connection pools.
+
+As replicas and services increase, connection management becomes important to prevent connection storms.
+
+The planned approach is to:
+
+- Set deliberate maximum connection-pool sizes.
+- Monitor active connections and pool exhaustion.
+- Add database proxies or poolers when appropriate.
+- Apply timeouts and retry policies consistently.
+- Monitor query duration and deadlocks.
+- Keep read-heavy workloads on Redis and Elasticsearch where appropriate.
+- Load-test database boundaries before production scaling.
+
+The exact pooling or proxy technology should be selected based on measured load and deployment requirements.
+
+---
+
+# Repository Structure
 
 ```text
 .
-|-- APIGateway/         Edge routing, OIDC session handling, and gateway policies
-|-- AppHost/            .NET Aspire application topology and infrastructure resources
-|-- EngagementService/  Comments, replies, reactions, mentions, and engagement events
-|-- EngagementService/  Comments, replies, reactions, mentions, and engagement events
-|-- FeedService/        Feed entries, Redis fan-out, and counter read models
-|-- MediaService/       Presigned upload/download URLs and S3-compatible storage access
-|-- PostService/        Posts, reposts, mentions, hashtags, transactions, and post events
-|-- SearchService/      Kafka consumers and Elasticsearch indexes/read models
-|-- ServiceDefaults/    Shared ASP.NET/Aspire defaults and observability setup
-|-- UserService/        Profiles, connections, user persistence, and user events
-|-- docker-compose.yml  Local infrastructure alternative
-|-- LinkedIn Clone.sln  Visual Studio solution
+├── APIGateway/          Edge routing, OIDC integration, and gateway policies
+├── AppHost/             .NET Aspire application topology
+├── EngagementService/   Comments, replies, reactions, and engagement events
+├── FeedService/         Feed entries, Redis fan-out, and counter read models
+├── MediaService/        Presigned URLs and S3-compatible storage access
+├── PostService/         Posts, reposts, mentions, hashtags, and post events
+├── SearchService/       Kafka consumers and Elasticsearch read models
+├── ServiceDefaults/     Shared ASP.NET/Aspire defaults and observability
+├── UserService/         Profiles, connections, persistence, and user events
+├── docker-compose.yml   Local infrastructure alternative
+└── LinkedIn Clone.sln  Visual Studio solution
 ```
 
-Services follow a feature-oriented structure where possible. Database migrations stay with the service that owns the data, and consumers stay close to the service that materializes their read model.
+Services follow a feature-oriented structure where possible.
 
-## Getting Started
+Database migrations stay with the service that owns the corresponding database, while consumers remain close to the read model they materialize.
 
-### Prerequisites
+---
+
+# Getting Started
+
+## Prerequisites
 
 - .NET 9 SDK
 - Docker Desktop with Linux containers enabled
 - Git
 - At least 8 GB of available memory for the local infrastructure stack
 
-### Configuration
+## Configuration
 
-Create or update the local environment values required by the compose file and local services. Do not commit real passwords, client secrets, access keys, or production connection strings.
+Configure the required local environment values for:
 
-The repository currently uses configuration sections for service URLs, SQL Server connections, PostgreSQL for Engagement Service, Kafka bootstrap servers, Elasticsearch, Keycloak, Redis, and S3-compatible storage. Check each service's `appsettings.Development.json` before starting it.
+- SQL Server
+- PostgreSQL
+- Kafka
+- Elasticsearch
+- Keycloak
+- Redis
+- MinIO
 
-### Run with .NET Aspire
+Do not commit:
+
+- Real passwords
+- Client secrets
+- Access keys
+- Production connection strings
+
+Check each service's `appsettings.Development.json` and local environment configuration before starting the application.
+
+---
+
+# Run with .NET Aspire
 
 From the repository root:
 
@@ -377,68 +732,123 @@ dotnet restore "LinkedIn Clone.sln"
 dotnet run --project AppHost/AppHost.csproj
 ```
 
-Open the Aspire dashboard URL printed by the AppHost. It exposes the local service topology, logs, endpoints, and resource health.
+Open the Aspire dashboard URL printed by AppHost.
 
-### Build the solution
+The dashboard provides:
+
+- Service topology
+- Logs
+- Endpoints
+- Resource health
+- Distributed application diagnostics
+
+---
+
+# Build the Solution
 
 ```bash
 dotnet build "LinkedIn Clone.sln"
 ```
 
-Development OpenAPI documents are exposed by the individual services when they run in the Development environment.
+Development OpenAPI documents are exposed by individual services when running in the Development environment.
 
-## Local Development Endpoints
+---
 
-Ports can change when running through Aspire. The following are the stable ports declared in the local infrastructure definitions:
+# Local Development Endpoints
 
-| Component        | URL                                                                              |
-| ---------------- | -------------------------------------------------------------------------------- |
-| Keycloak         | `http://localhost:8082`                                                          |
-| Kafka            | `localhost:9092` or `localhost:9094`, depending on the runner                    |
-| Kafka UI         | `http://localhost:8080` with Docker Compose, `http://localhost:8088` with Aspire |
-| Debezium Connect | `http://localhost:8083`                                                          |
-| Debezium UI      | `http://localhost:8085`                                                          |
-| Schema Registry  | `http://localhost:8081`                                                          |
-| Elasticsearch    | `http://localhost:9200`                                                          |
-| Kibana           | `http://localhost:5601`                                                          |
-| SQL Server       | `localhost:14330`                                                                |
-| PostgreSQL       | `localhost:5432`                                                                 |
-| Redis            | `http://localhost:6969` with Docker Compose                                      |
-| MinIO API        | `http://localhost:9000`                                                          |
-| MinIO Console    | `http://localhost:9001`                                                          |
+Ports may change when services are launched through Aspire.
 
-## Production Considerations
+The following are the stable ports used by the local infrastructure definitions:
 
-The local environment intentionally uses single-node resources, development-friendly images, and disabled local Elasticsearch security. Before production, the platform should add:
+| Component | URL |
+|---|---|
+| Keycloak | `http://localhost:8082` |
+| Kafka | `localhost:9092` / `localhost:9094` |
+| Kafka UI | `http://localhost:8080` / `http://localhost:8088` |
+| Debezium Connect | `http://localhost:8083` |
+| Debezium UI | `http://localhost:8085` |
+| Schema Registry | `http://localhost:8081` |
+| Elasticsearch | `http://localhost:9200` |
+| Kibana | `http://localhost:5601` |
+| SQL Server | `localhost:14330` |
+| PostgreSQL | `localhost:5432` |
+| Redis | `http://localhost:6969` |
+| MinIO API | `http://localhost:9000` |
+| MinIO Console | `http://localhost:9001` |
+
+---
+
+# Production Considerations
+
+The local environment intentionally uses single-node resources and development-friendly configuration.
+
+Before production, the platform should add:
 
 - TLS and authentication for Kafka, Elasticsearch, Redis, MinIO, and Debezium.
-- Managed secrets or a dedicated secret manager instead of environment-file secrets.
-- Multi-node Kafka and Elasticsearch with appropriate replication factors.
-- High-availability SQL Server and PostgreSQL deployment patterns, with tested backup and restore procedures for each database.
-- Idempotent consumers, dead-letter handling, retry policies, and event versioning.
-- Outbox retention and Debezium connector monitoring.
-- Resource limits, health probes, structured logs, traces, and metrics.
-- Database connection-pool limits based on load tests.
-- CI checks for build, migrations, API contracts, and container image vulnerabilities.
+- Managed secrets or a dedicated secret manager.
+- Multi-node Kafka and Elasticsearch deployments.
+- Appropriate Kafka replication factors.
+- Highly available SQL Server and PostgreSQL deployments.
+- Tested backup and restore procedures.
+- Idempotent Kafka consumers.
+- Retry and dead-letter handling.
+- Event compatibility and versioning.
+- Outbox retention policies.
+- Debezium connector monitoring.
+- Resource limits and health probes.
+- Structured logging, tracing, and metrics.
+- Database connection-pool limits based on load testing.
+- CI checks for builds, migrations, API contracts, and container vulnerabilities.
 
-## Roadmap
+---
 
-- Complete the end-to-end outbox and Debezium connector configuration for Post and Engagement services.
-- Complete the end-to-end outbox and Debezium connector configuration for Post and Engagement services.
+# Roadmap
+
+- Complete end-to-end outbox and Debezium configuration for Post and Engagement services.
 - Add event schemas and compatibility rules through Schema Registry.
 - Add idempotency and dead-letter handling to Kafka consumers.
 - Complete Feed Service fan-out for posts, reactions, and comments.
-- Add a Neo4j or JanusGraph projection for the connection graph driven by User Service events.
-- Add automated integration tests for SQL Server, PostgreSQL, Kafka, Elasticsearch, Redis, and MinIO flows.
+- Add a Neo4j or JanusGraph projection for the connection graph.
+- Add automated integration tests for SQL Server, PostgreSQL, Kafka, Elasticsearch, Redis, and MinIO.
 - Add production-grade observability dashboards and alerts.
-- Add connection-pool protection and load-test the database boundaries.
+- Add database connection-pool protection and load testing.
 - Add deployment manifests and environment-specific configuration.
 
+---
+
+# Architecture Principles
+
+```text
+                    ┌─────────────────────┐
+                    │      Clients        │
+                    └──────────┬──────────┘
+                               │
+                               ▼
+                    ┌─────────────────────┐
+                    │    YARP Gateway     │
+                    └──────────┬──────────┘
+                               │
+          ┌────────────────────┼────────────────────┐
+          ▼                    ▼                    ▼
+   User / Post /       Engagement / Feed       Media / Search
+      Services              Services              Services
+          │                    │                    │
+          └────────────────────┼────────────────────┘
+                               │
+                               ▼
+                            Kafka
+                               │
+             ┌─────────────────┼─────────────────┐
+             ▼                 ▼                 ▼
+           Feed             Search            Other
+        Projections       Projections        Consumers
+             │                 │
+             ▼                 ▼
+           Redis         Elasticsearch
 ```
 
+The core architectural idea is:
 
-```
+**Transactional services own their data, Kafka propagates committed business events, and specialized read models optimize workloads that require different access patterns.**
 
-```
-
-```
+This keeps service boundaries explicit while allowing the platform to evolve from a modular application into independently scalable services.
