@@ -1,7 +1,10 @@
+using System.Runtime;
 using Projects;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
+
+#region SQL Server
 var sqlPassword = builder.AddParameter("sql-password", secret: true);
 var sqlserver = builder.AddSqlServer("sqlserver", sqlPassword)
     .WithImageTag("2022-latest")
@@ -12,10 +15,21 @@ var sqlserver = builder.AddSqlServer("sqlserver", sqlPassword)
     .WithEnvironment("ACCEPT_EULA", "Y")
     .WithEnvironment("MSSQL_AGENT_ENABLED", "True")
     .WithLifetime(ContainerLifetime.Persistent);
-
-
 sqlserver.AddDatabase("keycloak-db");
+#endregion
 
+#region PostgreSQL
+var postgresUsername = builder.AddParameter("postgres-username", secret: true);
+var postgresPassword = builder.AddParameter("postgres-password", secret: true);
+var postgres = builder.AddPostgres("postgres", postgresUsername, postgresPassword)
+    .WithDataVolume(isReadOnly: false)
+    .WithEndpoint(port: 58878, targetPort: 5432, name: "tcp", isProxied: false)
+    .WithPgWeb();
+
+var engagementDb = postgres.AddDatabase("engagementDb");
+#endregion
+
+#region Keycloak
 var kcDb = builder.AddParameter("KC-DB", secret: true);
 var kcDbUrl = builder.AddParameter("KC-DB-URL", secret: true);
 var kcDbUsername = builder.AddParameter("KC-DB-USERNAME", secret: true);
@@ -52,8 +66,9 @@ var keycloak = builder.AddKeycloak("keycloak", 8082)
         });
 
 keycloak.WaitFor(sqlserver);
+#endregion
 
-
+#region Kafka
 var kafka = builder.AddKafka("kafka")
     .WithEndpoint(port: 9094, targetPort: 9094, name: "external", isProxied: false)
     .WithEndpoint(targetPort: 9092, name: "internal", isProxied: false)
@@ -74,7 +89,9 @@ var kafka = builder.AddKafka("kafka")
     .WithVolume("kafka_data", "/var/lib/kafka/data");
 
 
+#endregion
 
+#region Kafka UI
 
 var kafkaUi = builder.AddContainer("kafka-ui", "kafbat/kafka-ui", "latest")
 .WithHttpEndpoint(port: 8088, targetPort: 8080, name: "http", isProxied: false)
@@ -99,7 +116,9 @@ var kafkaUi = builder.AddContainer("kafka-ui", "kafbat/kafka-ui", "latest")
         });
 
 
+#endregion
 
+#region Debezium
 var debezium = builder.AddContainer("debezium", "quay.io/debezium/connect", "latest")
     .WithEnvironment("BOOTSTRAP_SERVERS", "kafka:9092")
     .WithEnvironment("GROUP_ID", "banking-connect")
@@ -114,6 +133,9 @@ var debezium = builder.AddContainer("debezium", "quay.io/debezium/connect", "lat
     .WithHttpEndpoint(port: 8083, targetPort: 8083, name: "http", isProxied: false)
     .WithExternalHttpEndpoints();
 
+#endregion
+
+#region Debezium UI
 var debeziumUi = builder.AddContainer("debezium-ui", "debezium/debezium-ui", "latest")
     .WithEnvironment("KAFKA_CONNECT_URIS", debezium.GetEndpoint("http"))
     .WithHttpEndpoint(port: 8085, targetPort: 8080, name: "http", isProxied: false)
@@ -135,11 +157,10 @@ var debeziumUi = builder.AddContainer("debezium-ui", "debezium/debezium-ui", "la
                 }
             );
         });
-debezium.WaitFor(kafka).WaitFor(sqlserver);
 
+#endregion
 
-
-
+#region Elasticsearch
 var elasticsearch = builder.AddElasticsearch("elasticsearch")
 .WithImageTag("8.11.0")
     .WithEnvironment("discovery.type", "single-node")
@@ -149,7 +170,9 @@ var elasticsearch = builder.AddElasticsearch("elasticsearch")
     .WithDataVolume("elasticsearch_data");
 
 
+#endregion
 
+#region MinIO
 var minioUser = builder.AddParameter("MinioUser", secret: false);
 var minioPassword = builder.AddParameter("MinioPassword", secret: true);
 
@@ -179,20 +202,13 @@ var minio = builder.AddContainer("minio", "minio/minio", "RELEASE.2025-02-18T16-
         });
 
 
+#endregion
 
-// redis:
-//     image: redis:alpine
-//     command: redis-server --appendonly yes
-//     container_name: redisdb
-//     volumes:
-//       - redis_data:/data
-//     ports:
-//       - "6379:6379"
+#region Redis
 var redis = builder.AddRedis("redis")
     .WithDataVolume(isReadOnly: false, name: "redis_data")
     .WithRedisInsight(redisInsight => redisInsight.WithHostPort(8001));
-
-;
+#endregion
 
 
 var userService = builder.AddProject<UserService>("user-service")
@@ -232,4 +248,11 @@ builder.AddProject<APIGateway>("APIGateway")
 .WithReference(keycloak, "keycloak")
 .WithReference(redis)
 .WithExternalHttpEndpoints();
+
+
+var engagementService = builder.AddProject<EngagementService>("engagement-service")
+    .WithReference(engagementDb)
+    .WithReference(kafka);
+
+
 builder.Build().Run();

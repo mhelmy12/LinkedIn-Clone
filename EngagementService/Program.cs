@@ -1,10 +1,11 @@
 using System.Reflection;
+using EngagementService.Behaviors;
 using EngagementService.Data;
 using IdGen.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
 using Shared.Extensions;
 var builder = WebApplication.CreateBuilder(args);
-
+builder.AddServiceDefaults();
 
 builder.Services.AddSharedInfrastructure([Assembly.GetExecutingAssembly()], (config) => { config.AddOpenBehavior(typeof(TransactionBehavior<,>)); });
 

@@ -11,7 +11,7 @@ public class GetPostsByAuthorQueryValidation : AbstractValidator<GetPostsByAutho
 
     public GetPostsByAuthorQueryValidation()
     {
-        RuleFor(x => x.AuthorId)
+        RuleFor(x => long.Parse(x.AuthorId))
     .GreaterThan(0)
     .WithMessage("AuthorId must be positive.");
 
