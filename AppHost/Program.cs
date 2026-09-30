@@ -240,19 +240,21 @@ var searchService = builder.AddProject<SearchService>("search-service")
 .WithReference(keycloak, "keycloak")
 .WithExternalHttpEndpoints();
 
+var engagementService = builder.AddProject<EngagementService>("engagement-service")
+    .WithReference(engagementDb)
+    .WithReference(kafka);
+
 builder.AddProject<APIGateway>("APIGateway")
 .WithReference(userService)
 .WithReference(mediaService)
 .WithReference(searchService)
 .WithReference(postService)
+.WithReference(engagementService)
 .WithReference(keycloak, "keycloak")
 .WithReference(redis)
 .WithExternalHttpEndpoints();
 
 
-var engagementService = builder.AddProject<EngagementService>("engagement-service")
-    .WithReference(engagementDb)
-    .WithReference(kafka);
 
 
 builder.Build().Run();

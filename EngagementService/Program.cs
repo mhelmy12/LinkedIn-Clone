@@ -1,4 +1,5 @@
 using System.Reflection;
+using Carter;
 using EngagementService.Behaviors;
 using EngagementService.Data;
 using IdGen.DependencyInjection;
@@ -46,7 +47,8 @@ if (app.Environment.IsDevelopment())
 }
 
 
+app.MapCarter();
 
-app.MapGet("/engagement", () => "Hello Engagement Service!").AllowAnonymous();
+app.MapGet("/engagements", () => "Hello Engagement Service!").AllowAnonymous();
 
 app.Run();

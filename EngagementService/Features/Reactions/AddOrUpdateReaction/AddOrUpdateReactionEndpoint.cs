@@ -9,7 +9,7 @@ public class AddOrUpdateReactionEndpoint : ICarterModule
 {
     public void AddRoutes(IEndpointRouteBuilder app)
     {
-        app.MapPut("/reactions", async (
+        app.MapPut("/engagements/reactions", async (
           AddOrUpdateReactionCommand command,
           IMediator mediator,
           CancellationToken ct) =>

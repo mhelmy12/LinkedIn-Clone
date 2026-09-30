@@ -155,7 +155,7 @@ namespace EngagementService.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("OutboxMessages");
+                    b.ToTable("OutboxMessages", (string)null);
                 });
 
             modelBuilder.Entity("EngagementService.Models.Reaction", b =>
@@ -171,9 +171,9 @@ namespace EngagementService.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
 
-                    b.Property<string>("TargetId")
+                    b.Property<long>("TargetId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("bigint");
 
                     b.Property<string>("TargetType")
                         .IsRequired()

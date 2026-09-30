@@ -58,7 +58,7 @@ namespace EngagementService.Migrations
                     Id = table.Column<long>(type: "bigint", nullable: false),
                     UserId = table.Column<string>(type: "text", nullable: false),
                     TargetType = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
-                    TargetId = table.Column<string>(type: "text", nullable: false),
+                    TargetId = table.Column<long>(type: "bigint", nullable: false),
                     Type = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
