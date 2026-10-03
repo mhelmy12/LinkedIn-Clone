@@ -22,6 +22,9 @@ public class CommentConfiguration : IEntityTypeConfiguration<Comment>
         builder.Property(c => c.Content)
             .HasMaxLength(3000);
 
+        builder.Property(c => c.Depth).IsRequired().HasDefaultValue(0);
+        builder.Property(c => c.RepliesCount).IsRequired().HasDefaultValue(0);
+
         builder.Property(c => c.CreatedAt).IsRequired();
         builder.Property(c => c.UpdatedAt);
 
@@ -59,5 +62,8 @@ public class CommentConfiguration : IEntityTypeConfiguration<Comment>
         builder.HasIndex(c => new { c.AuthorId, c.CreatedAt })
             .HasFilter("\"IsDeleted\" = false")
             .HasDatabaseName("IX_Comments_Author");
+
+        builder.HasIndex(c => c.ParentCommentId)
+            .HasDatabaseName("IX_Comments_ParentCommentId");
     }
 }
