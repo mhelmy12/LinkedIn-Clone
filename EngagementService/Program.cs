@@ -1,6 +1,7 @@
 using System.Reflection;
 using Carter;
 using EngagementService.Behaviors;
+using EngagementService.Consumers;
 using EngagementService.Data;
 using IdGen.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
@@ -28,6 +29,8 @@ builder.AddRedisClient("redis");
 #endregion
 
 #region  Services Container
+
+builder.Services.AddHostedService<PostDeletedConsumer>();
 
 
 #endregion
