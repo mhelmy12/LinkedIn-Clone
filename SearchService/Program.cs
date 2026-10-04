@@ -18,14 +18,19 @@ builder.Services.AddSharedInfrastructure([Assembly.GetExecutingAssembly()]);
 // builder.Services.AddSingleton(new ElasticsearchClient(settings));
 
 builder.Services.AddElasticsearchClient(builder.Configuration);
-builder.Services.AddHostedService<PostsIndexInitializer>();
+builder.Services.AddHostedService<SearchIndexesInitializer>();
 
 
+builder.Services.AddScoped<IPostIndexer, PostIndexer>();
+builder.Services.AddScoped<ICommentIndexer, CommentIndexer>();
 
 builder.Services.AddHostedService<SyncUsersToElasticConsumer>();
 builder.Services.AddHostedService<UpdatedProfileUserConsumer>();
 builder.Services.AddHostedService<PostCreatedConsumer>();
 builder.Services.AddHostedService<PostUpdatedConsumer>();
+builder.Services.AddHostedService<CommentCreatedConsumer>();
+builder.Services.AddHostedService<CommentUpdatedConsumer>();
+builder.Services.AddHostedService<CommentDeletedConsumer>();
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
