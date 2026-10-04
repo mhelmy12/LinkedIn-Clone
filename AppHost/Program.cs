@@ -214,47 +214,55 @@ var redis = builder.AddRedis("redis")
 
 
 var userService = builder.AddProject<UserService>("user-service")
-.WithReference(kafka, "kafka")
-.WithReference(sqlserver, "sqlserver")
-.WithReference(keycloak, "keycloak")
-.WithExternalHttpEndpoints();
+    .WithReference(kafka, "kafka")
+    .WithReference(sqlserver, "sqlserver")
+    .WithReference(keycloak, "keycloak")
+    .WithExternalHttpEndpoints();
 
 
 var postService = builder.AddProject<PostService>("post-service")
-.WithReference(kafka, "kafka")
-.WithReference(sqlserver, "sqlserver")
-.WithReference(redis, "redis")
-.WithExternalHttpEndpoints();
+    .WithReference(kafka, "kafka")
+    .WithReference(sqlserver, "sqlserver")
+    .WithReference(redis, "redis")
+    .WithExternalHttpEndpoints();
 
 
 
 var mediaService = builder.AddProject<MediaService>("media-service")
-.WithEnvironment("AWS__AccessKey", minioUser)
-.WithEnvironment("AWS__SecretKey", minioPassword)
-.WithEnvironment("AWS__ServiceUrl", minio.GetEndpoint("api"))
-.WithExternalHttpEndpoints();
+    .WithEnvironment("AWS__AccessKey", minioUser)
+    .WithEnvironment("AWS__SecretKey", minioPassword)
+    .WithEnvironment("AWS__ServiceUrl", minio.GetEndpoint("api"))
+    .WithExternalHttpEndpoints();
 
 
 
 var searchService = builder.AddProject<SearchService>("search-service")
-.WithReference(kafka, "kafka")
-.WithReference(elasticsearch, "elasticsearch")
-.WithReference(keycloak, "keycloak")
-.WithExternalHttpEndpoints();
+    .WithReference(kafka, "kafka")
+    .WithReference(elasticsearch, "elasticsearch")
+    .WithReference(keycloak, "keycloak")
+    .WithExternalHttpEndpoints();
 
 var engagementService = builder.AddProject<EngagementService>("engagement-service")
     .WithReference(engagementDb)
     .WithReference(kafka);
 
+
+var feedService = builder.AddProject<FeedService>("feed-service")
+    .WithReference(kafka)
+    .WithReference(postgres)
+    .WithReference(redis)
+    .WithExternalHttpEndpoints();
+
 builder.AddProject<APIGateway>("APIGateway")
-.WithReference(userService)
-.WithReference(mediaService)
-.WithReference(searchService)
-.WithReference(postService)
-.WithReference(engagementService)
-.WithReference(keycloak, "keycloak")
-.WithReference(redis)
-.WithExternalHttpEndpoints();
+    .WithReference(userService)
+    .WithReference(mediaService)
+    .WithReference(searchService)
+    .WithReference(postService)
+    .WithReference(engagementService)
+    .WithReference(feedService)
+    .WithReference(keycloak, "keycloak")
+    .WithReference(redis)
+    .WithExternalHttpEndpoints();
 
 
 
