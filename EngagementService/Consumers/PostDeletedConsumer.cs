@@ -15,13 +15,11 @@ public record PostDeletedEvent(
     DateTimeOffset DeletedAt);
 public class PostDeletedConsumer : BackgroundService
 {
-    private readonly IConsumer<string, string> _consumer;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IConfiguration _config;
     private readonly ILogger<PostDeletedConsumer> _logger;
 
     public PostDeletedConsumer(
-        IConsumer<string, string> consumer,
         IServiceScopeFactory scopeFactory,
         IConfiguration config,
         ILogger<PostDeletedConsumer> logger)
@@ -29,16 +27,17 @@ public class PostDeletedConsumer : BackgroundService
         _scopeFactory = scopeFactory;
         _config = config;
         _logger = logger;
-        _consumer = KafkaConsumerFactory.Create(
-           config.GetValue<string>("Kafka:BootstrapServers")!,
-           "post-deleted-consumer-group"
 
-       );
     }
 
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        using var _consumer = KafkaConsumerFactory.Create(
+            _config["Kafka:BootstrapServers"]!,
+            "engagement-service-post-deleted");
+
+
         _consumer.Subscribe("postService.LinkedInPostDb.dbo.OutboxMessages");
 
         while (!stoppingToken.IsCancellationRequested)
