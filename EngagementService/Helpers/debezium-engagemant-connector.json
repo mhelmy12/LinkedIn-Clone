@@ -1,0 +1,27 @@
+{
+  "name": "engagement-outbox-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "tasks.max": "1",
+
+    "database.hostname": "postgres",
+    "database.port": "5432",
+    "database.user": "postgres",
+    "database.password": "<PASSWORD>",
+    "database.dbname": "engagementDb",
+
+    "topic.prefix": "engagementService",
+    "table.include.list": "public.OutboxMessages",
+
+    "plugin.name": "pgoutput",
+    "slot.name": "engagement_outbox_slot",
+    "publication.name": "engagement_outbox_publication",
+    "publication.autocreate.mode": "filtered",
+
+    "schema.history.internal.kafka.bootstrap.servers": "kafka:9092",
+    "schema.history.internal.kafka.topic": "schema-changes.engagementService",
+
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": "false"
+  }
+}

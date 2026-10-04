@@ -23,8 +23,10 @@ var postgresUsername = builder.AddParameter("postgres-username", secret: true);
 var postgresPassword = builder.AddParameter("postgres-password", secret: true);
 var postgres = builder.AddPostgres("postgres", postgresUsername, postgresPassword)
     .WithDataVolume(isReadOnly: false)
+    .WithEnvironment("POSTGRES_INITDB_ARGS", "-c wal_level=logical")
     .WithEndpoint(port: 58878, targetPort: 5432, name: "tcp", isProxied: false)
     .WithPgWeb();
+
 
 var engagementDb = postgres.AddDatabase("engagementDb");
 #endregion

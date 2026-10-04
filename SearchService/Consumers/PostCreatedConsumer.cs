@@ -81,12 +81,3 @@ public class PostCreatedConsumer : BackgroundService
 }
 
 
-public class PostDocument
-{
-    public long Id { get; set; }
-    public string AuthorId { get; set; }
-    public string? Content { get; set; }
-    public List<string> Hashtags { get; set; } = new();
-    public List<string> MentionedUserIds { get; set; } = new();
-    public DateTime CreatedAt { get; set; }
-}

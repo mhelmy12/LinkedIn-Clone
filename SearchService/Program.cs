@@ -2,17 +2,24 @@ using System.Reflection;
 using Carter;
 using Elastic.Clients.Elasticsearch;
 using SearchService.Consumers;
+using SearchService.Helpers.ElasticsearchConfigurations;
+using SearchService.Indexes;
 using Shared.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
 
 builder.Services.AddSharedInfrastructure([Assembly.GetExecutingAssembly()]);
-var elasticConnectionString = builder.Configuration.GetConnectionString("elasticsearch");
-var settings = new ElasticsearchClientSettings(new Uri(elasticConnectionString ?? "http://localhost:9200"))
-    .DefaultIndex("users");
+// var elasticConnectionString = builder.Configuration.GetConnectionString("elasticsearch");
+// var settings = new ElasticsearchClientSettings(new Uri(elasticConnectionString ?? "http://localhost:9200"))
+//     .DefaultIndex("users");
 
-builder.Services.AddSingleton(new ElasticsearchClient(settings));
+// builder.Services.AddSingleton(new ElasticsearchClient(settings));
+
+builder.Services.AddElasticsearchClient(builder.Configuration);
+builder.Services.AddHostedService<PostsIndexInitializer>();
+
+
 
 builder.Services.AddHostedService<SyncUsersToElasticConsumer>();
 builder.Services.AddHostedService<UpdatedProfileUserConsumer>();
