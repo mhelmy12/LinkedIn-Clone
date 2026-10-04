@@ -6,6 +6,6 @@ public record PostCreatedEvent(
     string? Content,
     string Visibility,
     long? QuotedPostId,
-    IReadOnlyList<string>? MentionedUserIds,
-    IReadOnlyList<string>? Hashtags,
+    List<string>? MentionedUserIds,
+    List<string>? Hashtags,
     DateTime CreatedAt);

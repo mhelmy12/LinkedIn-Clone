@@ -2,82 +2,120 @@ using System;
 using System.Text.Json;
 using Confluent.Kafka;
 using Elastic.Clients.Elasticsearch;
+using Microsoft.Extensions.Options;
+using SearchService.Domain;
 using SearchService.Events;
 using SearchService.Helpers.KafkaConfiguration;
+using SearchService.Indexes;
 
-namespace SearchService.Consumers;
+namespace SearchService.Infrastructure.Kafka.Consumers;
 
 public class PostCreatedConsumer : BackgroundService
 {
     private readonly IConsumer<string, string> _consumer;
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly KafkaOptions _options;
     private readonly ILogger<PostCreatedConsumer> _logger;
-    private readonly IConfiguration _config;
-    private readonly ElasticsearchClient _elasticsearchClient;
+
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
 
     public PostCreatedConsumer(
-    ILogger<PostCreatedConsumer> logger,
-    IConfiguration config,
-    ElasticsearchClient elasticsearchClient
-
-    )
+        IOptions<KafkaOptions> options,
+        IServiceScopeFactory scopeFactory,
+        ILogger<PostCreatedConsumer> logger)
     {
-        _config = config;
+        _options = options.Value;
+        _scopeFactory = scopeFactory;
         _logger = logger;
-        _elasticsearchClient = elasticsearchClient;
-        _consumer = KafkaConsumerFactory.Create(
-            config.GetValue<string>("Kafka:BootstrapServers")!,
-            "post-created-consumer-group"
 
-        );
+        var config = new ConsumerConfig
+        {
+            BootstrapServers = _options.BootstrapServers,
+            GroupId = "search-service-post-created",
+            AutoOffsetReset = AutoOffsetReset.Earliest,
+            EnableAutoCommit = false
+        };
+
+        _consumer = new ConsumerBuilder<string, string>(config).Build();
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _consumer.Subscribe("postService.LinkedInPostDb.dbo.OutboxMessages");
+        _consumer.Subscribe(_options.PostServiceTopic);
 
+        _logger.LogInformation(
+            "PostCreatedConsumer started. Topic: {Topic}, Group: search-service-post-created",
+            _options.PostServiceTopic);
 
-        while (!stoppingToken.IsCancellationRequested)
+        try
         {
-            var result = _consumer.Consume(TimeSpan.FromMilliseconds(500));
-            if (result?.Message?.Value is null)
-                continue;
-
-            try
+            while (!stoppingToken.IsCancellationRequested)
             {
-                using var doc = JsonDocument.Parse(result.Message.Value);
-                var after = doc.RootElement.GetProperty("after");
-                var type = after.GetProperty("Type").GetString();
+                try
+                {
+                    var result = _consumer.Consume(
+                        TimeSpan.FromMilliseconds(_options.ConsumerPollTimeoutMs));
 
-                if (type != nameof(PostCreatedEvent))
-                    continue;
+                    if (result?.Message?.Value is null)
+                        continue;
 
-                var payloadJson = after.GetProperty("Payload").GetString()!;
-                var postEvent = JsonSerializer.Deserialize<PostCreatedEvent>(
-                    payloadJson,
-                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-
-                _logger.LogInformation($"Received post created event for post {postEvent}");
-
-                if (postEvent is null)
-                    continue;
-
-                await _elasticsearchClient.IndexAsync(postEvent, idx => idx
-                    .Index("posts")
-                    .Id(postEvent.PostId.ToString()));
-
-
-                _consumer.Commit(result);
-
-                _logger.LogInformation("Indexed post {PostId}", postEvent.PostId);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to process message");
+                    await ProcessAsync(result.Message.Value, stoppingToken);
+                    _consumer.Commit(result);
+                }
+                catch (ConsumeException ex)
+                {
+                    _logger.LogError(ex, "Consume error: {Reason}", ex.Error.Reason);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex,
+                        "Error processing message. Offset will not be committed.");
+                }
             }
         }
+        finally
+        {
+            _consumer.Close();
+        }
+    }
 
-        _consumer.Close();
+    private async Task ProcessAsync(string rawJson, CancellationToken ct)
+    {
+        // 1. Parse Debezium envelope
+        var envelope = JsonSerializer.Deserialize<DebeziumEnvelope>(rawJson, JsonOptions);
+        if (envelope?.After is null) return;
+
+        // 2. Filter: PostCreated only
+        if (envelope.After.Type != "PostCreated") return;
+
+        // 3. Parse payload
+        var @event = JsonSerializer.Deserialize<PostCreatedEvent>(
+            envelope.After.Payload, JsonOptions);
+
+        if (@event is null)
+        {
+            _logger.LogWarning("Failed to deserialize PostCreatedEvent");
+            return;
+        }
+
+        // 4. Build document
+        var document = new PostDocument
+        {
+            Id = @event.PostId,
+            AuthorId = @event.AuthorId,
+            Content = @event.Content,
+            Hashtags = @event.Hashtags ?? new List<string>(),
+            MentionedUserIds = @event.MentionedUserIds ?? new List<string>(),
+            CreatedAt = @event.CreatedAt,
+            IndexedAt = DateTime.UtcNow
+        };
+
+        using var scope = _scopeFactory.CreateScope();
+        var indexer = scope.ServiceProvider.GetRequiredService<IPostIndexer>();
+
+        await indexer.IndexAsync(document, ct);
     }
 }
-
-
