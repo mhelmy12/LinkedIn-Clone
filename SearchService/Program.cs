@@ -4,6 +4,7 @@ using Elastic.Clients.Elasticsearch;
 using SearchService.Consumers;
 using SearchService.Helpers.ElasticsearchConfigurations;
 using SearchService.Indexes;
+using SearchService.Infrastructure.Kafka.Consumers;
 using Shared.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -24,6 +25,7 @@ builder.Services.AddHostedService<PostsIndexInitializer>();
 builder.Services.AddHostedService<SyncUsersToElasticConsumer>();
 builder.Services.AddHostedService<UpdatedProfileUserConsumer>();
 builder.Services.AddHostedService<PostCreatedConsumer>();
+builder.Services.AddHostedService<PostUpdatedConsumer>();
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
