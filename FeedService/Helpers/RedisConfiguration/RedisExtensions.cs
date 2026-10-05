@@ -11,7 +11,7 @@ public static class RedisExtensions
     {
         services.AddSingleton<IFeedCache, RedisFeedCache>();
         services.AddSingleton<ICountersCache, RedisCountersCache>();
-        // services.AddSingleton<IConnectionsCache, RedisConnectionsCache>();
+        services.AddSingleton<IConnectionsCache, RedisConnectionsCache>();
 
         return services;
     }
