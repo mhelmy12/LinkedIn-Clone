@@ -10,6 +10,7 @@ using Shared.Extensions;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddSharedInfrastructure([Assembly.GetExecutingAssembly()], (config) => { config.AddOpenBehavior(typeof(TransactionBehavior<,>)); });
+builder.Services.AddFeddInfrastructure();
 
 
 
@@ -25,7 +26,6 @@ builder.Services.AddIdGen(4);
 #region Redis Configuration
 
 builder.AddRedisClient("redis");
-builder.Services.AddFeddInfrastructure();
 
 #endregion
 
