@@ -11,6 +11,8 @@ public class FeedDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+           modelBuilder.ApplyConfigurationsFromAssembly(
+            typeof(FeedDbContext).Assembly);
         base.OnModelCreating(modelBuilder);
 
     }
