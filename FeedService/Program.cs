@@ -3,6 +3,8 @@ using Carter;
 using FeedService.Behaviors;
 using FeedService.Data;
 using FeedService.Helpers;
+using FeedService.Helpers.KafkaConfiguration;
+using FeedService.Kafka.Consumers;
 using IdGen.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
 using Shared.Extensions;
@@ -28,6 +30,12 @@ builder.Services.AddIdGen(4);
 builder.AddRedisClient("redis");
 
 #endregion
+
+builder.Services.Configure<KafkaOptions>(
+    builder.Configuration.GetSection(KafkaOptions.SectionName));
+
+    
+builder.Services.AddHostedService<PostCreatedConsumer>();
 
 
 // Add services to the container.

@@ -3,6 +3,7 @@ using Carter;
 using Elastic.Clients.Elasticsearch;
 using SearchService.Consumers;
 using SearchService.Helpers.ElasticsearchConfigurations;
+using SearchService.Helpers.KafkaConfiguration;
 using SearchService.Indexes;
 using SearchService.Infrastructure.Kafka.Consumers;
 using Shared.Extensions;
@@ -19,7 +20,8 @@ builder.Services.AddSharedInfrastructure([Assembly.GetExecutingAssembly()]);
 
 builder.Services.AddElasticsearchClient(builder.Configuration);
 builder.Services.AddHostedService<SearchIndexesInitializer>();
-
+builder.Services.Configure<KafkaOptions>(
+    builder.Configuration.GetSection(KafkaOptions.SectionName));
 
 builder.Services.AddScoped<IPostIndexer, PostIndexer>();
 builder.Services.AddScoped<ICommentIndexer, CommentIndexer>();
