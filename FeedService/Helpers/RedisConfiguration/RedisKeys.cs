@@ -4,7 +4,7 @@ public static class RedisKeys
 {
     // Feed entries: Sorted SetS
     //   ZADD feed:{userId} score postId
-    public static string Feed(long userId) => $"feed:{userId}";
+    public static string Feed(string userId) => $"feed:{userId}";
 
     // Post counters: Hash
     //   HINCRBY post:{postId}:counters reactions 1
@@ -16,7 +16,7 @@ public static class RedisKeys
 
     // Connections: Set
     //   SADD connections:{userId} connectedUserId
-    public static string Connections(long userId) => $"connections:{userId}";
+    public static string Connections(string userId) => $"connections:{userId}";
 
     // Hash field names (constants)
     public static class CounterFields
