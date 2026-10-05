@@ -2,7 +2,7 @@ using System.Reflection;
 using Carter;
 using FeedService.Behaviors;
 using FeedService.Data;
-using FeedService.Helpers.RedisConfiguration;
+using FeedService.Helpers;
 using IdGen.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
 using Shared.Extensions;
@@ -25,7 +25,7 @@ builder.Services.AddIdGen(4);
 #region Redis Configuration
 
 builder.AddRedisClient("redis");
-builder.Services.AddRedisCaches();
+builder.Services.AddFeddInfrastructure();
 
 #endregion
 

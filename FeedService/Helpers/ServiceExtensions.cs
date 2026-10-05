@@ -3,11 +3,11 @@ using FeedService.Abstractions;
 using FeedService.Data;
 using FeedService.Redis;
 
-namespace FeedService.Helpers.RedisConfiguration;
+namespace FeedService.Helpers;
 
-public static class RedisExtensions
+public static class ServiceExtensions
 {
-    public static IServiceCollection AddRedisCaches(
+    public static IServiceCollection AddFeddInfrastructure(
         this IServiceCollection services)
     {
         services.AddSingleton<IFeedCache, RedisFeedCache>();
