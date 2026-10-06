@@ -19,6 +19,7 @@
     <PackageReference Include="Aspire.Hosting.PostgreSQL" Version="13.5.4" />
     <PackageReference Include="Aspire.Hosting.Redis" Version="13.5.3" />
     <PackageReference Include="Aspire.Hosting.SqlServer" Version="13.5.3" />
+    <PackageReference Include="NorthernNerds.Aspire.Hosting.Neo4j" Version="2.0.0" />
 
   </ItemGroup>
 
@@ -26,6 +27,7 @@
     <ProjectReference Include="..\APIGateway\APIGateway.csproj" />
     <ProjectReference Include="..\EngagementService\EngagementService.csproj" />
     <ProjectReference Include="..\FeedService\FeedService.csproj" />
+    <ProjectReference Include="..\GraphService\GraphService.csproj" />
     <ProjectReference Include="..\MediaService\MediaService.csproj" />
     <ProjectReference Include="..\PostService\PostService.csproj" />
     <ProjectReference Include="..\SearchService\SearchService.csproj" />

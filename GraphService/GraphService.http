@@ -1,0 +1,6 @@
+@GraphService_HostAddress = http://localhost:5269
+
+GET {{GraphService_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

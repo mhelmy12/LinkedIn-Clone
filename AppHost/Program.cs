@@ -1,4 +1,5 @@
 using System.Runtime;
+using NorthernNerds.Aspire.Hosting.Neo4j;
 using Projects;
 
 var builder = DistributedApplication.CreateBuilder(args);
@@ -212,6 +213,16 @@ var redis = builder.AddRedis("redis")
     .WithRedisInsight(redisInsight => redisInsight.WithHostPort(8001));
 #endregion
 
+#region Neo4j
+var neo4jPass = builder.AddParameter("neo4j-pass", secret: true);
+var neo4jUser = builder.AddParameter("neo4j-user", secret: true);
+
+var neo4jDb = builder.AddNeo4j("graph-db", neo4jUser, neo4jPass)
+    .WithHttpEndpoint(targetPort: 7474, name: "http")
+    .WithEndpoint(targetPort: 7687, name: "bolt")
+    .WithVolume("neo4j-data", "/data");
+#endregion
+
 
 var userService = builder.AddProject<UserService>("user-service")
     .WithReference(kafka, "kafka")
@@ -253,6 +264,10 @@ var feedService = builder.AddProject<FeedService>("feed-service")
     .WithReference(redis)
     .WithExternalHttpEndpoints();
 
+var graphService = builder.AddProject<GraphService>("graph-service")
+    .WithReference(kafka)
+    .WithExternalHttpEndpoints();
+
 builder.AddProject<APIGateway>("APIGateway")
     .WithReference(userService)
     .WithReference(mediaService)
@@ -260,6 +275,7 @@ builder.AddProject<APIGateway>("APIGateway")
     .WithReference(postService)
     .WithReference(engagementService)
     .WithReference(feedService)
+    .WithReference(graphService)
     .WithReference(keycloak, "keycloak")
     .WithReference(redis)
     .WithExternalHttpEndpoints();
