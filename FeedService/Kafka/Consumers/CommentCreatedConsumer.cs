@@ -1,27 +1,33 @@
+using System;
+
+namespace FeedService.Kafka.Consumers;
+
 using System.Text.Json;
 using Confluent.Kafka;
 using FeedService.Abstractions;
 using FeedService.Helpers.KafkaConfiguration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 
-namespace FeedService.Kafka.Consumers;
-public class CommentDeletedConsumer : BackgroundService
+public class CommentCreatedConsumer : BackgroundService
 {
     private readonly IConsumer<string, string> _consumer;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly KafkaOptions _options;
-    private readonly ILogger<CommentDeletedConsumer> _logger;
+    private readonly ILogger<CommentCreatedConsumer> _logger;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true
     };
 
-    public CommentDeletedConsumer(
+    public CommentCreatedConsumer(
         IOptions<KafkaOptions> options,
         IServiceScopeFactory scopeFactory,
-        ILogger<CommentDeletedConsumer> logger)
+        ILogger<CommentCreatedConsumer> logger)
     {
         _options = options.Value;
         _scopeFactory = scopeFactory;
@@ -30,7 +36,7 @@ public class CommentDeletedConsumer : BackgroundService
         var config = new ConsumerConfig
         {
             BootstrapServers = _options.BootstrapServers,
-            GroupId = "feed-service-comment-deleted",
+            GroupId = "feed-service-comment-created",
             AutoOffsetReset = AutoOffsetReset.Earliest,
             EnableAutoCommit = false
         };
@@ -43,7 +49,7 @@ public class CommentDeletedConsumer : BackgroundService
         _consumer.Subscribe(_options.EngagementServiceTopic);
 
         _logger.LogInformation(
-            "CommentDeletedConsumer started. Group: feed-service-comment-deleted");
+            "CommentCreatedConsumer started. Group: feed-service-comment-created");
 
         try
         {
@@ -67,7 +73,7 @@ public class CommentDeletedConsumer : BackgroundService
                 catch (Exception ex)
                 {
                     _logger.LogError(ex,
-                        "Error processing CommentDeleted. Offset will NOT be committed.");
+                        "Error processing CommentCreated. Offset will NOT be committed.");
                 }
             }
         }
@@ -82,38 +88,31 @@ public class CommentDeletedConsumer : BackgroundService
         var envelope = JsonSerializer.Deserialize<DebeziumEnvelope>(rawJson, JsonOptions);
         if (envelope?.After is null) return;
 
-        if (envelope.After.Type != "CommentDeleted") return;
+        if (envelope.After.Type != "CommentCreated") return;
 
-        var @event = JsonSerializer.Deserialize<CommentDeletedEvent>(
+        var @event = JsonSerializer.Deserialize<CommentCreatedEvent>(
             envelope.After.Payload, JsonOptions);
 
         if (@event is null) return;
-
-        var deletedCount = @event.DeletedCommentIds?.Count ?? 1;
-
-        if (deletedCount == 0)
-        {
-            _logger.LogWarning(
-                "CommentDeleted event has empty DeletedCommentIds — skipping");
-            return;
-        }
 
         using var scope = _scopeFactory.CreateScope();
         var countersCache = scope.ServiceProvider
             .GetRequiredService<ICountersCache>();
 
-        await countersCache.IncrementCommentsAsync(
-            @event.PostId, -deletedCount, ct);
+        await countersCache.IncrementCommentsAsync(@event.PostId, 1, ct);
 
         _logger.LogDebug(
-            "CommentDeleted processed: Post {PostId} comments -{Count} (root: {RootId})",
-            @event.PostId, deletedCount, @event.CommentId);
+            "CommentCreated processed: Post {PostId} comments +1 (comment: {CommentId})",
+            @event.PostId, @event.CommentId);
     }
 }
-public record CommentDeletedEvent(
-    long CommentId,           // root
+
+
+public record CommentCreatedEvent(
+    long CommentId,
     long PostId,
     string AuthorId,
     long? ParentCommentId,
-    List<long> DeletedCommentIds,   // all deleted (root + descendants)
-    DateTime DeletedAt);
+    string? Content,
+    List<string> MentionedUserIds,
+    DateTime CreatedAt);

@@ -34,8 +34,13 @@ builder.AddRedisClient("redis");
 builder.Services.Configure<KafkaOptions>(
     builder.Configuration.GetSection(KafkaOptions.SectionName));
 
-    
+
 builder.Services.AddHostedService<PostCreatedConsumer>();
+
+builder.Services.AddHostedService<ReactionAddedConsumer>();
+builder.Services.AddHostedService<ReactionRemovedConsumer>();
+builder.Services.AddHostedService<CommentCreatedConsumer>();
+builder.Services.AddHostedService<CommentDeletedConsumer>();
 
 
 // Add services to the container.
