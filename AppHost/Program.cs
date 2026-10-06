@@ -218,8 +218,27 @@ var neo4jPass = builder.AddParameter("neo4j-pass", secret: true);
 var neo4jUser = builder.AddParameter("neo4j-user", secret: true);
 
 var neo4jDb = builder.AddNeo4j("graph-db", neo4jUser, neo4jPass)
+    .WithEnvironment("NEO4J_server_memory_heap_initial__size", "512m")
+    .WithEnvironment("NEO4J_server_memory_heap_max__size", "1G")
+    .WithEnvironment("NEO4J_server_memory_pagecache_size", "512m")
     .WithHttpEndpoint(targetPort: 7474, name: "http")
     .WithEndpoint(targetPort: 7687, name: "bolt")
+    .WithUrls(context =>
+        {
+            foreach (var u in context.Urls)
+            {
+                u.DisplayLocation = UrlDisplayLocation.DetailsOnly;
+            }
+
+            context.Urls.Add(
+                new ResourceUrlAnnotation()
+                {
+                    Url = "/",
+                    DisplayText = "Neo4j UI",
+                    Endpoint = context.GetEndpoint("http"),
+                }
+            );
+        })
     .WithVolume("neo4j-data", "/data");
 #endregion
 
