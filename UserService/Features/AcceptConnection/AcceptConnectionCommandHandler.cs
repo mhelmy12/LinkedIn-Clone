@@ -64,7 +64,7 @@ public class AcceptConnectionCommandHandler(
         {
             Id = Guid.NewGuid().ToString(),
             OccurredOn = DateTime.Now,
-            EventType = nameof(ConnectionAcceptedEvent),
+            Type = nameof(ConnectionAcceptedEvent),
             Payload = System.Text.Json.JsonSerializer.Serialize(connectionAcceptedEvent),
             AggregateId = connection.Id.ToString(),
             AggregateType = nameof(Connection)

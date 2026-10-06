@@ -64,7 +64,7 @@ public class UpdateProfileCommandHandler : ResponseHandler, IRequestHandler<Upda
         var outboxMessage = new OutboxMessage
         {
             Id = Guid.NewGuid().ToString(),
-            EventType = nameof(UserProfileUpdatedEvent),
+            Type = nameof(UserProfileUpdatedEvent),
             Payload = System.Text.Json.JsonSerializer.Serialize(initiatedEvent),
             OccurredOn = DateTime.UtcNow,
             AggregateId = user.KeycloakId.ToString(),

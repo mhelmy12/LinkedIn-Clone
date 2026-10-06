@@ -58,7 +58,7 @@ public class RemoveConnectionHandler(
         {
             Id = Guid.NewGuid().ToString(),
             Payload = JsonSerializer.Serialize(@event),
-            EventType = nameof(ConnectionRemovedEvent),
+            Type = nameof(ConnectionRemovedEvent),
             AggregateType = nameof(Connection),
             AggregateId = connection.Id.ToString(),
             OccurredOn = now
