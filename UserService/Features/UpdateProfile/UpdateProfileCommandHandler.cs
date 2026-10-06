@@ -58,7 +58,9 @@ public class UpdateProfileCommandHandler : ResponseHandler, IRequestHandler<Upda
             LastName = user.LastName,
             Headline = user.Headline,
             JobTitle = user.JobTitle,
-            Email = user.Email
+            Email = user.Email,
+            ProfileImageKey = user.ProfilePictureUrl,
+            UpdatedAt = DateTime.Now
         };
 
         var outboxMessage = new OutboxMessage

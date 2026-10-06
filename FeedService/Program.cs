@@ -52,6 +52,8 @@ builder.Services.AddHostedService<CommentDeletedConsumer>();
 builder.Services.AddHostedService<ConnectionAcceptedConsumer>();
 builder.Services.AddHostedService<ConnectionRemovedConsumer>();
 
+builder.Services.AddHostedService<UserProfileUpdatedConsumer>();
+
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi

@@ -17,4 +17,8 @@ public class UserProfileUpdatedEvent
 
     public string? Email { get; set; } = null!;
 
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    public string? ProfileImageKey { get; set; } = null!;
+
 }
