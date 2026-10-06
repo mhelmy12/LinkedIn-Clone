@@ -20,6 +20,8 @@ builder.Services.Configure<KafkaOptions>(
 
 
 builder.Services.AddHostedService<UserProfileUpdatedConsumer>();
+builder.Services.AddHostedService<ConnectionAcceptedConsumer>();
+builder.Services.AddHostedService<ConnectionRemovedConsumer>();
 
 
 // Add services to the container.
