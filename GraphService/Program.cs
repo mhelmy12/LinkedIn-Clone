@@ -1,6 +1,8 @@
 using System.Reflection;
 using Carter;
 using GraphService.Abstractions;
+using GraphService.Kafka.Consumers;
+using GraphService.Kafka.KafkaConfiguration;
 using GraphService.Neo4j;
 using Shared.Extensions;
 
@@ -12,6 +14,12 @@ builder.Services.AddNeo4jDriver(builder.Configuration);
 
 
 builder.Services.AddScoped<IGraphRepository, Neo4jGraphRepository>();
+builder.Services.Configure<KafkaOptions>(
+    builder.Configuration.GetSection(KafkaOptions.SectionName));
+
+
+
+builder.Services.AddHostedService<UserProfileUpdatedConsumer>();
 
 
 // Add services to the container.
