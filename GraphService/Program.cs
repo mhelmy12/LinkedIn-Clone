@@ -14,8 +14,14 @@ builder.Services.AddNeo4jDriver(builder.Configuration);
 
 
 builder.Services.AddScoped<IGraphRepository, Neo4jGraphRepository>();
+
+
 builder.Services.Configure<KafkaOptions>(
     builder.Configuration.GetSection(KafkaOptions.SectionName));
+
+
+builder.Services.Configure<GraphOptions>(
+    builder.Configuration.GetSection(GraphOptions.SectionName));
 
 
 
