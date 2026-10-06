@@ -3,6 +3,7 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Shared.Helpers;
 using UserService.Data;
+using UserService.Events;
 using UserService.Models;
 using UserService.Services.CurrentUserService;
 
@@ -51,6 +52,24 @@ public class AcceptConnectionCommandHandler(
         }
 
         connection.Status = ConnectionStatus.CONNECTED;
+
+
+        var connectionAcceptedEvent = new ConnectionAcceptedEvent(
+            connection.RequesterId,
+            connection.TargetId,
+            DateTime.Now
+        );
+
+        dbContext.OutboxMessages.Add(new OutboxMessage
+        {
+            Id = Guid.NewGuid().ToString(),
+            OccurredOn = DateTime.Now,
+            EventType = nameof(ConnectionAcceptedEvent),
+            Payload = System.Text.Json.JsonSerializer.Serialize(connectionAcceptedEvent),
+            AggregateId = connection.Id.ToString(),
+            AggregateType = nameof(Connection)
+
+        });
 
 
 
