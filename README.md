@@ -2,7 +2,9 @@
 
 A distributed backend for a LinkedIn-style social platform, built with **ASP.NET Core** and **.NET Aspire**.
 
-The system is split into focused services for identity, users, posts, engagement, feeds, search, media, and API composition.
+The system is split into focused services for identity, users, posts, engagement, feeds, graph intelligence, search, media, and API composition.
+
+The current local environment is orchestrated through the Aspire AppHost and includes SQL Server, PostgreSQL, Keycloak, Kafka, Debezium, Elasticsearch, Redis, MinIO, and a Neo4j graph database for relationship-heavy social graph features.
 
 The main goal of this project is not only to reproduce social-network features, but also to demonstrate the architectural decisions required when a modular monolith grows into independently deployable services.
 
@@ -34,6 +36,7 @@ flowchart LR
     Gateway --> Post[Post Service]
     Gateway --> Engagement[Engagement Service]
     Gateway --> Feed[Feed Service]
+    Gateway --> Graph[Graph Service]
     Gateway --> Media[Media Service]
     Gateway --> Search[Search Service]
 
@@ -42,14 +45,17 @@ flowchart LR
     Engagement --> EngagementDB[(Engagement PostgreSQL DB)]
     Feed --> FeedDB[(Feed SQL Server DB)]
     Feed --> Redis[(Redis)]
+    Graph --> Neo4j[(Neo4j\nGraph DB)]
     Media --> MinIO[(MinIO\nS3-compatible storage)]
 
     User --> Kafka[(Apache Kafka)]
     Post --> Kafka
     Engagement --> Kafka
+    Graph --> Kafka
 
     Kafka --> Feed
     Kafka --> Search
+    Kafka --> Graph
     Kafka --> Debezium[Debezium Kafka Connect]
     Debezium --> Kafka
 
@@ -62,14 +68,15 @@ flowchart LR
 
 1. A client authenticates through **Keycloak** using OpenID Connect.
 2. The **API Gateway** handles routing and authentication integration before forwarding requests to the appropriate service.
-3. Each service persists data in its own database. Most services use SQL Server, while Engagement Service uses PostgreSQL.
+3. Each service persists data in its own database. Most services use SQL Server, while Engagement Service uses PostgreSQL and the Graph Service persists social relationships in Neo4j.
 4. Important domain changes are written to an **outbox table** within the same transaction as the business data.
 5. **Debezium** captures committed outbox records through CDC and publishes them to Kafka.
 6. Each service publishes events for changes within its own bounded context.
 7. **Feed Service** consumes post, connection, reaction, and comment events to maintain Redis-backed feeds and counter read models.
 8. **Search Service** consumes user, post, and comment events to maintain Elasticsearch read models.
-9. **Media Service** generates short-lived presigned URLs so clients can upload and download files directly from MinIO.
-10. Downstream services never read another service's database directly.
+9. **Graph Service** consumes connection and profile events to maintain a Neo4j-backed social graph for network traversal and relationship queries.
+10. **Media Service** generates short-lived presigned URLs so clients can upload and download files directly from MinIO.
+11. Downstream services never read another service's database directly.
 
 ---
 
@@ -133,6 +140,17 @@ Owns:
 - Search-specific read models
 
 It consumes events from User, Post, and Engagement services and maintains denormalized documents optimized for search queries.
+
+### Graph Service
+
+Owns:
+
+- Social graph projections
+- Connection relationships
+- Network expansion and graph queries
+- Relationship-based recommendations or traversal logic
+
+It consumes user and connection events and persists the relationship model in Neo4j, allowing queries such as mutual connections, second-degree networks, and relationship-aware recommendations without coupling the transactional services to graph-specific joins.
 
 ### Media Service
 
@@ -410,21 +428,22 @@ For incompatible changes, a new event type/version is introduced while consumers
 
 # Technology Stack
 
-| Area | Technology | Responsibility |
-|---|---|---|
-| Runtime | .NET 9 / ASP.NET Core | Service implementation and HTTP APIs |
-| Orchestration | .NET Aspire | Local distributed application orchestration and service discovery |
-| Edge | YARP | Routing, authentication integration, rate limiting, and API composition |
-| Identity | Keycloak | OIDC/OAuth 2.0, users, roles, sessions, and tokens |
-| Relational Data | SQL Server | Primary transactional storage |
-| Engagement Database | PostgreSQL | Engagement Service transactional storage |
-| ORM | Entity Framework Core | Persistence, migrations, and transaction handling |
-| Messaging | Apache Kafka | Durable event streaming |
-| CDC | Debezium | Outbox change capture and Kafka publishing |
-| Cache / Hot State | Redis | Feed sorted sets and counter read models |
-| Search | Elasticsearch | Search indexes and read models |
-| Object Storage | MinIO | S3-compatible media storage |
-| API | Carter / OpenAPI | Lightweight endpoint modules and API documentation |
+| Area                | Technology            | Responsibility                                                          |
+| ------------------- | --------------------- | ----------------------------------------------------------------------- |
+| Runtime             | .NET 9 / ASP.NET Core | Service implementation and HTTP APIs                                    |
+| Orchestration       | .NET Aspire           | Local distributed application orchestration and service discovery       |
+| Edge                | YARP                  | Routing, authentication integration, rate limiting, and API composition |
+| Identity            | Keycloak              | OIDC/OAuth 2.0, users, roles, sessions, and tokens                      |
+| Relational Data     | SQL Server            | Primary transactional storage                                           |
+| Engagement Database | PostgreSQL            | Engagement Service transactional storage                                |
+| ORM                 | Entity Framework Core | Persistence, migrations, and transaction handling                       |
+| Messaging           | Apache Kafka          | Durable event streaming                                                 |
+| CDC                 | Debezium              | Outbox change capture and Kafka publishing                              |
+| Cache / Hot State   | Redis                 | Feed sorted sets and counter read models                                |
+| Graph Database      | Neo4j                 | Social graph storage, relationship queries, and graph traversal         |
+| Search              | Elasticsearch         | Search indexes and read models                                          |
+| Object Storage      | MinIO                 | S3-compatible media storage                                             |
+| API                 | Carter / OpenAPI      | Lightweight endpoint modules and API documentation                      |
 
 ---
 
@@ -434,13 +453,13 @@ For incompatible changes, a new event type/version is introduced while consumers
 
 Keycloak was selected because identity is treated as a platform capability rather than business logic owned by User Service.
 
-| Keycloak | ASP.NET Core Identity |
-|---|---|
-| Dedicated identity server | Embedded application identity framework |
-| OIDC/OAuth 2.0 built in | Requires additional protocol and hosting decisions |
-| Centralized realm, client, role, session, and token management | Greater control inside the .NET application |
-| Works well across multiple services and clients | Excellent for a single ASP.NET application |
-| Realm export/import simplifies local environments | Usually requires custom administration and migration workflows |
+| Keycloak                                                       | ASP.NET Core Identity                                          |
+| -------------------------------------------------------------- | -------------------------------------------------------------- |
+| Dedicated identity server                                      | Embedded application identity framework                        |
+| OIDC/OAuth 2.0 built in                                        | Requires additional protocol and hosting decisions             |
+| Centralized realm, client, role, session, and token management | Greater control inside the .NET application                    |
+| Works well across multiple services and clients                | Excellent for a single ASP.NET application                     |
+| Realm export/import simplifies local environments              | Usually requires custom administration and migration workflows |
 
 ASP.NET Core Identity would still be a valid choice for a modular monolith. Keycloak fits this architecture because authentication remains outside business services and follows standard identity protocols.
 
@@ -464,12 +483,12 @@ A managed provider such as Auth0 may be more appropriate when reducing identity 
 
 Kafka is used because the project treats events as a durable stream rather than only transient work items.
 
-| Kafka | RabbitMQ |
-|---|---|
-| Durable append-only log | Queue-oriented message broker |
-| Replayable event history | Strong task/work distribution model |
-| Independent consumer groups | Rich routing and exchange model |
-| Natural partitioning | Flexible routing keys |
+| Kafka                              | RabbitMQ                                    |
+| ---------------------------------- | ------------------------------------------- |
+| Durable append-only log            | Queue-oriented message broker               |
+| Replayable event history           | Strong task/work distribution model         |
+| Independent consumer groups        | Rich routing and exchange model             |
+| Natural partitioning               | Flexible routing keys                       |
 | Strong fit for CDC and projections | Strong fit for commands and background jobs |
 
 Kafka also integrates naturally with the Debezium CDC pipeline and allows Feed and Search projections to be rebuilt from event history.
@@ -760,21 +779,21 @@ Ports may change when services are launched through Aspire.
 
 The following are the stable ports used by the local infrastructure definitions:
 
-| Component | URL |
-|---|---|
-| Keycloak | `http://localhost:8082` |
-| Kafka | `localhost:9092` / `localhost:9094` |
-| Kafka UI | `http://localhost:8080` / `http://localhost:8088` |
-| Debezium Connect | `http://localhost:8083` |
-| Debezium UI | `http://localhost:8085` |
-| Schema Registry | `http://localhost:8081` |
-| Elasticsearch | `http://localhost:9200` |
-| Kibana | `http://localhost:5601` |
-| SQL Server | `localhost:14330` |
-| PostgreSQL | `localhost:5432` |
-| Redis | `http://localhost:6969` |
-| MinIO API | `http://localhost:9000` |
-| MinIO Console | `http://localhost:9001` |
+| Component        | URL                                               |
+| ---------------- | ------------------------------------------------- |
+| Keycloak         | `http://localhost:8082`                           |
+| Kafka            | `localhost:9092` / `localhost:9094`               |
+| Kafka UI         | `http://localhost:8080` / `http://localhost:8088` |
+| Debezium Connect | `http://localhost:8083`                           |
+| Debezium UI      | `http://localhost:8085`                           |
+| Schema Registry  | `http://localhost:8081`                           |
+| Elasticsearch    | `http://localhost:9200`                           |
+| Kibana           | `http://localhost:5601`                           |
+| SQL Server       | `localhost:14330`                                 |
+| PostgreSQL       | `localhost:5432`                                  |
+| Redis            | `http://localhost:6969`                           |
+| MinIO API        | `http://localhost:9000`                           |
+| MinIO Console    | `http://localhost:9001`                           |
 
 ---
 
