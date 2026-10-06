@@ -4,6 +4,7 @@ using FeedService.Behaviors;
 using FeedService.Data;
 using FeedService.Helpers;
 using FeedService.Helpers.KafkaConfiguration;
+using FeedService.Helpers.RedisConfiguration;
 using FeedService.Kafka.Consumers;
 using IdGen.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
@@ -12,7 +13,7 @@ using Shared.Extensions;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddSharedInfrastructure([Assembly.GetExecutingAssembly()], (config) => { config.AddOpenBehavior(typeof(TransactionBehavior<,>)); });
-builder.Services.AddFeddInfrastructure();
+builder.Services.AddFeedInfrastructure();
 
 
 
@@ -33,6 +34,9 @@ builder.AddRedisClient("redis");
 
 builder.Services.Configure<KafkaOptions>(
     builder.Configuration.GetSection(KafkaOptions.SectionName));
+
+builder.Services.Configure<FeedOptions>(
+    builder.Configuration.GetSection(FeedOptions.SectionName));
 
 
 builder.Services.AddHostedService<PostCreatedConsumer>();

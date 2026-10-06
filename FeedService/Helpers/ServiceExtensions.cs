@@ -8,7 +8,7 @@ namespace FeedService.Helpers;
 
 public static class ServiceExtensions
 {
-    public static IServiceCollection AddFeddInfrastructure(
+    public static IServiceCollection AddFeedInfrastructure(
         this IServiceCollection services)
     {
         services.AddSingleton<IFeedCache, RedisFeedCache>();
