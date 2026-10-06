@@ -51,28 +51,9 @@ public class PostSnapshotStore : ISnapshotStore
         PostSnapshot snapshot,
         CancellationToken ct = default)
     {
-        var existing = await _db.PostSnapshots
-            .FirstOrDefaultAsync(p => p.PostId == snapshot.PostId, ct);
 
-        if (existing is null)
-        {
-            _logger.LogWarning(
-                "PostSnapshot {PostId} not found — inserting instead",
-                snapshot.PostId);
-
-            _db.PostSnapshots.Add(snapshot);
-            await _db.SaveChangesAsync(ct);
-            return;
-        }
-
-        existing.Content = snapshot.Content;
-        existing.Visibility = snapshot.Visibility;
-        existing.Hashtags = snapshot.Hashtags;
-        existing.MentionedUserIds = snapshot.MentionedUserIds;
-        existing.UpdatedAt = snapshot.UpdatedAt;
-
+        _db.PostSnapshots.Update(snapshot);
         await _db.SaveChangesAsync(ct);
-
         _logger.LogDebug("PostSnapshot {PostId} updated", snapshot.PostId);
     }
 

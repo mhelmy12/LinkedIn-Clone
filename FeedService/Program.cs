@@ -36,6 +36,8 @@ builder.Services.Configure<KafkaOptions>(
 
 
 builder.Services.AddHostedService<PostCreatedConsumer>();
+builder.Services.AddHostedService<PostUpdatedConsumer>();
+builder.Services.AddHostedService<PostDeletedConsumer>();
 
 builder.Services.AddHostedService<ReactionAddedConsumer>();
 builder.Services.AddHostedService<ReactionRemovedConsumer>();
