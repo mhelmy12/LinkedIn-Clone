@@ -2,9 +2,9 @@
 
 A distributed backend for a LinkedIn-style social platform, built with **ASP.NET Core** and **.NET Aspire**.
 
-The system is split into focused services for identity, users, posts, engagement, feeds, graph intelligence, search, media, and API composition.
+The system is split into focused services for identity, users, posts, engagement, feeds, graph intelligence, search, media, real-time chat, and API composition.
 
-The current local environment is orchestrated through the Aspire AppHost and includes SQL Server, PostgreSQL, Keycloak, Kafka, Debezium, Elasticsearch, Redis, MinIO, and a Neo4j graph database for relationship-heavy social graph features.
+The current local environment is orchestrated through the Aspire AppHost and includes SQL Server, PostgreSQL, Keycloak, Kafka, Debezium, Elasticsearch, Redis, MinIO, and Neo4j. Chat uses PostgreSQL for durable state, SignalR with a Redis backplane for real-time delivery, and Kafka only for projections and background work—not for transporting live chat messages.
 
 The main goal of this project is not only to reproduce social-network features, but also to demonstrate the architectural decisions required when a modular monolith grows into independently deployable services.
 
@@ -39,6 +39,7 @@ flowchart LR
     Gateway --> Graph[Graph Service]
     Gateway --> Media[Media Service]
     Gateway --> Search[Search Service]
+    Gateway --> Chat[Chat Service\nSignalR]
 
     User --> UserDB[(User SQL Server DB)]
     Post --> PostDB[(Post SQL Server DB)]
@@ -47,17 +48,25 @@ flowchart LR
     Feed --> Redis[(Redis)]
     Graph --> Neo4j[(Neo4j\nGraph DB)]
     Media --> MinIO[(MinIO\nS3-compatible storage)]
+    Chat --> ChatDB[(Chat PostgreSQL DB)]
+    Chat --> Redis
+    Chat -. profile/connection fallback .-> User
 
     User --> Kafka[(Apache Kafka)]
     Post --> Kafka
     Engagement --> Kafka
     Graph --> Kafka
+    Kafka --> Chat
+    ChatDB --> Debezium
+
+    UserDB --> Debezium
+    PostDB --> Debezium
+    EngagementDB --> Debezium
 
     Kafka --> Feed
     Kafka --> Search
     Kafka --> Graph
-    Kafka --> Debezium[Debezium Kafka Connect]
-    Debezium --> Kafka
+    Debezium[Debezium Kafka Connect] --> Kafka
 
     Search --> Elasticsearch[(Elasticsearch)]
 
@@ -68,7 +77,7 @@ flowchart LR
 
 1. A client authenticates through **Keycloak** using OpenID Connect.
 2. The **API Gateway** handles routing and authentication integration before forwarding requests to the appropriate service.
-3. Each service persists data in its own database. Most services use SQL Server, while Engagement Service uses PostgreSQL and the Graph Service persists social relationships in Neo4j.
+3. Each service persists data in its own database. Most transactional services use SQL Server, Engagement and Chat use separate PostgreSQL databases, and Graph Service persists its read model in Neo4j.
 4. Important domain changes are written to an **outbox table** within the same transaction as the business data.
 5. **Debezium** captures committed outbox records through CDC and publishes them to Kafka.
 6. Each service publishes events for changes within its own bounded context.
@@ -76,7 +85,10 @@ flowchart LR
 8. **Search Service** consumes user, post, and comment events to maintain Elasticsearch read models.
 9. **Graph Service** consumes connection and profile events to maintain a Neo4j-backed social graph for network traversal and relationship queries.
 10. **Media Service** generates short-lived presigned URLs so clients can upload and download files directly from MinIO.
-11. Downstream services never read another service's database directly.
+11. **Chat Service** receives authenticated SignalR and REST traffic through the gateway, stores encrypted message envelopes in `chatDb`, and uses Redis Pub/Sub to deliver hub events across instances.
+12. Chat consumes user-profile and connection events into local projections. A guarded User Service API fallback is used only when projection data is missing or stale.
+13. Kafka is reserved for durable events and background work such as future offline email/push notifications; live chat messages are never sent through Kafka.
+14. Downstream services never read another service's database directly.
 
 ---
 
@@ -161,6 +173,23 @@ Owns:
 - MinIO access
 
 Binary files are transferred directly between clients and object storage rather than through the API Gateway.
+
+### Chat Service
+
+Owns:
+
+- Conversations between connected users
+- Encrypted message envelopes and durable history
+- Per-device public keys and wrapped conversation-key envelopes
+- Local user and connection projections
+- Inbox/outbox records for reliable asynchronous processing
+- SignalR connection and conversation-group management
+
+The implemented foundation includes its PostgreSQL schema and initial migration, Snowflake IDs for conversations and messages, gateway-header authentication, a Redis SignalR backplane, Kafka projection consumers, access control, and string serialization for 64-bit IDs.
+
+Chat identifies users by the Keycloak `sub` value supplied in the gateway-injected `X-User-Id` header. It does not validate JWTs itself and never reads User Service or Post Service databases. Connection checks use local projections first and fail closed when neither the projection nor the guarded User Service fallback can confirm access.
+
+End-to-end message exchange, history endpoints, typing, presence, read receipts, and offline delivery are being added in the next feature phases; they should not yet be considered complete.
 
 ---
 
@@ -366,6 +395,20 @@ Consumers can remove stale media references or treat missing media as unavailabl
 
 ---
 
+## Chat Service Event Integration
+
+Chat Service currently consumes these User Service events:
+
+- `UserProfileUpdated` to maintain display-name and email projections.
+- `ConnectionAccepted` to upsert an active connection in both directions.
+- `ConnectionRemoved` to mark both projected directions inactive.
+
+The consumers use manual Kafka offset commits, a dependency-injection scope per message, bounded retries, and a dead-letter topic. Projection writes are idempotent upserts so at-least-once delivery does not create duplicate relationships.
+
+The planned outbound `ChatMessageNotificationRequested` event contains notification metadata but no encrypted message content. It will be written through the Chat outbox and used only for offline email/push processing.
+
+---
+
 # Event Topics and Consumer Groups
 
 Each service writes events to its own outbox table.
@@ -374,9 +417,11 @@ For example:
 
 ```text
 postService.dbo.OutboxMessages
+userService.LinkedInUserDb.dbo.OutboxMessages
+chatService.public.OutboxMessages
 ```
 
-Debezium publishes the outbox records to the corresponding Kafka topic.
+Debezium publishes the outbox records to the corresponding Kafka topic. The Chat connector uses PostgreSQL logical replication (`wal_level=logical`); its default topic is `chatService.public.OutboxMessages`.
 
 Consumers use independent consumer groups:
 
@@ -406,6 +451,7 @@ The project uses several patterns:
 - Upserts for projection updates.
 - Absolute Redis writes where possible instead of unsafe increments.
 - Inbox/deduplication tables for operations that cannot naturally be made idempotent.
+- A unique Chat message key of `(ConversationId, SenderId, ClientMessageId)` for safe client retries.
 
 For example, an external side effect such as sending an email should be protected by an inbox or deduplication mechanism keyed by the event ID.
 
@@ -434,16 +480,18 @@ For incompatible changes, a new event type/version is introduced while consumers
 | Orchestration       | .NET Aspire           | Local distributed application orchestration and service discovery       |
 | Edge                | YARP                  | Routing, authentication integration, rate limiting, and API composition |
 | Identity            | Keycloak              | OIDC/OAuth 2.0, users, roles, sessions, and tokens                      |
-| Relational Data     | SQL Server            | Primary transactional storage                                           |
-| Engagement Database | PostgreSQL            | Engagement Service transactional storage                                |
+| Relational Data     | SQL Server            | Primary transactional storage for most services                         |
+| PostgreSQL          | PostgreSQL            | Isolated Engagement and Chat transactional databases                    |
 | ORM                 | Entity Framework Core | Persistence, migrations, and transaction handling                       |
 | Messaging           | Apache Kafka          | Durable event streaming                                                 |
 | CDC                 | Debezium              | Outbox change capture and Kafka publishing                              |
-| Cache / Hot State   | Redis                 | Feed sorted sets and counter read models                                |
+| Cache / Hot State   | Redis                 | Feed read models and the SignalR scale-out backplane                     |
 | Graph Database      | Neo4j                 | Social graph storage, relationship queries, and graph traversal         |
 | Search              | Elasticsearch         | Search indexes and read models                                          |
 | Object Storage      | MinIO                 | S3-compatible media storage                                             |
 | API                 | Carter / OpenAPI      | Lightweight endpoint modules and API documentation                      |
+| Real-Time Transport | SignalR / WebSockets  | Authenticated hub connections and live chat delivery                    |
+| ID Generation       | Snowflake (`long`)    | Distributed conversation and message IDs, serialized as JSON strings    |
 
 ---
 
@@ -494,6 +542,27 @@ Kafka is used because the project treats events as a durable stream rather than 
 Kafka also integrates naturally with the Debezium CDC pipeline and allows Feed and Search projections to be rebuilt from event history.
 
 RabbitMQ would still be a reasonable choice for task-oriented background processing.
+
+---
+
+## Why SignalR and Redis for Chat?
+
+Chat delivery is latency-sensitive and bidirectional, so connected clients use SignalR over WebSockets rather than consuming a durable event stream.
+
+- **SignalR** provides authenticated hubs, connection lifecycle handling, and user/conversation groups.
+- **Redis Pub/Sub** is the SignalR backplane, allowing clients connected to different Chat Service instances to receive the same live event.
+- **PostgreSQL** remains the durable source of truth for conversations and encrypted message envelopes.
+- **Kafka** is not on the live message path. It is used for incoming projections and durable background tasks such as offline notification requests.
+
+This keeps real-time delivery fast without treating Redis as durable storage or exposing chat content to the event bus.
+
+---
+
+## Why End-to-End Encrypted Envelopes?
+
+Chat Service stores ciphertext, a 12-byte nonce, and algorithm metadata instead of plaintext message content. The design uses P-256 ECDH, HKDF, and AES-256-GCM, with opaque wrapped conversation keys stored per registered device.
+
+The server enforces participant and connection access but does not need plaintext to route or persist a message. Conversation and message Snowflake IDs are returned as JSON strings to prevent precision loss in JavaScript clients.
 
 ---
 
@@ -619,9 +688,9 @@ The two definitions should remain aligned as the project evolves.
 
 ---
 
-# Future Direction: Graph Database
+# Graph Read Model
 
-Connections are currently stored relationally inside User Service.
+Connections are stored relationally inside User Service, which remains the source of truth.
 
 This works well for:
 
@@ -636,9 +705,9 @@ More complex queries such as:
 - Degrees of separation
 - Graph-based feed signals
 
-can become increasingly expensive in a relational database.
+can become increasingly expensive in a relational database. Graph Service therefore maintains a Neo4j read model from profile and connection events.
 
-The planned approach is to add a graph **read model**, rather than replacing User Service.
+The graph database supplements rather than replaces User Service:
 
 ```text
 User Service
@@ -648,26 +717,26 @@ User Service
    Kafka
      │
      ▼
-Graph Projection
+Graph Service
      │
      ▼
-Neo4j / JanusGraph
+Neo4j
 ```
 
 The responsibilities remain:
 
 - User Service remains the source of truth.
-- Connection events populate the graph projection.
+- Profile and connection events populate the graph projection.
 - The graph database handles traversal-heavy queries.
 - Feed and Search can consume graph-derived signals without querying User Service tables.
 
-The decision to introduce a graph database should be based on measured query requirements rather than anticipated scale.
+Graph Service currently supports relationship-oriented operations such as mutual connections and connection suggestions while keeping transactional ownership in User Service.
 
 ---
 
 # Database and Connection Pooling Roadmap
 
-The current local environment uses SQL Server for most services and PostgreSQL for Engagement Service.
+The current local environment uses SQL Server for most services, separate PostgreSQL databases for Engagement and Chat, and Neo4j for the graph read model.
 
 EF Core uses the underlying ADO.NET connection pools.
 
@@ -693,13 +762,18 @@ The exact pooling or proxy technology should be selected based on measured load 
 .
 ├── APIGateway/          Edge routing, OIDC integration, and gateway policies
 ├── AppHost/             .NET Aspire application topology
+├── ChatService/         SignalR hub, encrypted chat persistence, and projections
 ├── EngagementService/   Comments, replies, reactions, and engagement events
 ├── FeedService/         Feed entries, Redis fan-out, and counter read models
+├── GraphService/        Neo4j social graph projection and traversal queries
 ├── MediaService/        Presigned URLs and S3-compatible storage access
 ├── PostService/         Posts, reposts, mentions, hashtags, and post events
 ├── SearchService/       Kafka consumers and Elasticsearch read models
 ├── ServiceDefaults/     Shared ASP.NET/Aspire defaults and observability
+├── Tests/               Unit and integration test projects by service
 ├── UserService/         Profiles, connections, persistence, and user events
+├── infra/debezium/      CDC connector definitions, including the Chat outbox
+├── specs/               Feature specifications, plans, contracts, and task boards
 ├── docker-compose.yml   Local infrastructure alternative
 └── LinkedIn Clone.sln  Visual Studio solution
 ```
@@ -730,6 +804,8 @@ Configure the required local environment values for:
 - Keycloak
 - Redis
 - MinIO
+- Neo4j
+- Chat Service PostgreSQL (`ChatDbConnection`)
 
 Do not commit:
 
@@ -771,6 +847,14 @@ dotnet build "LinkedIn Clone.sln"
 
 Development OpenAPI documents are exposed by individual services when running in the Development environment.
 
+Chat unit tests can be run independently with:
+
+```bash
+dotnet test Tests/ChatService.Tests/ChatService.Tests.csproj
+```
+
+The initial Chat migration is stored with `ChatService` and creates conversations, messages, device keys, wrapped key envelopes, local projections, and inbox/outbox tables in `chatDb`.
+
 ---
 
 # Local Development Endpoints
@@ -795,6 +879,15 @@ The following are the stable ports used by the local infrastructure definitions:
 | MinIO API        | `http://localhost:9000`                           |
 | MinIO Console    | `http://localhost:9001`                           |
 
+Application service ports may be dynamically assigned by Aspire. Clients reach Chat through these authenticated gateway routes:
+
+| Route | Purpose |
+| ----- | ------- |
+| `/api/chat/{**catch-all}` | Chat REST API route |
+| `/hubs/chat/{**catch-all}` | SignalR negotiation and WebSocket transport route |
+
+The gateway validates the Keycloak identity and injects the Keycloak `sub` as `X-User-Id` on the internal forwarded request. Clients must not supply or rely on this trusted internal header directly.
+
 ---
 
 # Production Considerations
@@ -818,17 +911,41 @@ Before production, the platform should add:
 - Structured logging, tracing, and metrics.
 - Database connection-pool limits based on load testing.
 - CI checks for builds, migrations, API contracts, and container vulnerabilities.
+- Strict gateway-to-service trust controls so `X-User-Id` cannot be spoofed by direct external traffic.
+- Redis high availability and SignalR scale-out testing for Chat Service.
+
+---
+
+# Current Chat Implementation Status
+
+Chat is being delivered in small, review-gated phases. The setup and all foundational phases through **Phase 2D** are complete.
+
+| Area | Current status |
+| ---- | -------------- |
+| Service topology | `chat-service`, `chatDb`, Redis, Kafka, User Service discovery, gateway REST/hub routes, Compose, and Debezium connector are wired |
+| Persistence | Initial PostgreSQL schema and migration for conversations, messages, device keys, wrapped keys, projections, inbox, and outbox |
+| IDs and JSON | Snowflake `long` IDs for conversations/messages; REST and SignalR serialize them as strings |
+| Real-time foundation | Authorized SignalR hub, user/conversation groups, CORS policy, and optional Redis scale-out backplane |
+| Identity | Gateway-header authentication using Keycloak `sub`; no Chat Service JWT validation or token parsing |
+| Projections | Idempotent consumers for profile updates and accepted/removed connections with manual commits, bounded retry, and DLQ publishing |
+| Access control | Participant checks, active-connection projection checks, short-lived fallback caching, and guarded User Service verification |
+| User Service support | `GET /users/connections/{otherUserId}/status` confirms an active, non-deleted connection for the caller |
+| Tests | 43 Chat unit tests and 53 User Service tests passed at the Phase 2D review gate; the Chat integration-test project is scaffolded |
+
+The next increment is the Phase 3 MVP: create/get conversations, register device keys, exchange wrapped keys, send encrypted messages, list conversations, and retrieve keyset-paged history. Live container-based projection, Redis scale-out, and fallback verification remain integration gates.
 
 ---
 
 # Roadmap
 
-- Complete end-to-end outbox and Debezium configuration for Post and Engagement services.
+- Complete Chat Phase 3: encrypted message exchange, conversation/device-key APIs, durable keyset-paged history, and retry deduplication.
+- Add Chat typing indicators, presence, read receipts, and offline email/push notification processing in subsequent review-gated phases.
+- Add container-backed Chat integration coverage for PostgreSQL, Redis, Kafka, SignalR scale-out, and User Service fallback behavior.
+- Complete end-to-end outbox and Debezium validation for service event pipelines.
 - Add event schemas and compatibility rules through Schema Registry.
 - Add idempotency and dead-letter handling to Kafka consumers.
 - Complete Feed Service fan-out for posts, reactions, and comments.
-- Add a Neo4j or JanusGraph projection for the connection graph.
-- Add automated integration tests for SQL Server, PostgreSQL, Kafka, Elasticsearch, Redis, and MinIO.
+- Expand automated integration tests for SQL Server, PostgreSQL, Kafka, Elasticsearch, Redis, Neo4j, and MinIO.
 - Add production-grade observability dashboards and alerts.
 - Add database connection-pool protection and load testing.
 - Add deployment manifests and environment-specific configuration.
@@ -847,23 +964,23 @@ Before production, the platform should add:
                     │    YARP Gateway     │
                     └──────────┬──────────┘
                                │
-          ┌────────────────────┼────────────────────┐
-          ▼                    ▼                    ▼
-   User / Post /       Engagement / Feed       Media / Search
-      Services              Services              Services
-          │                    │                    │
-          └────────────────────┼────────────────────┘
+      ┌───────────────┬────────┼────────┬───────────────┐
+      ▼               ▼        ▼        ▼               ▼
+ User / Post     Engagement   Feed   Media/Search   Graph/Chat
+   Services       Service   Service    Services      Services
+      │               │        │           │              │
+      └───────────────┴────────┼───────────┴──────────────┘
                                │
                                ▼
                             Kafka
                                │
-             ┌─────────────────┼─────────────────┐
-             ▼                 ▼                 ▼
-           Feed             Search            Other
-        Projections       Projections        Consumers
-             │                 │
-             ▼                 ▼
-           Redis         Elasticsearch
+        ┌───────────────┬──────┼──────────────┐
+        ▼               ▼      ▼              ▼
+      Feed           Search   Graph          Chat
+   Projections    Projections Projection  Projections
+        │               │      │              │
+        ▼               ▼      ▼              ▼
+      Redis       Elasticsearch Neo4j      PostgreSQL
 ```
 
 The core architectural idea is:
