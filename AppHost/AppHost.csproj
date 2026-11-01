@@ -25,6 +25,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\APIGateway\APIGateway.csproj" />
+    <ProjectReference Include="..\ChatService\ChatService.csproj" />
     <ProjectReference Include="..\EngagementService\EngagementService.csproj" />
     <ProjectReference Include="..\FeedService\FeedService.csproj" />
     <ProjectReference Include="..\GraphService\GraphService.csproj" />

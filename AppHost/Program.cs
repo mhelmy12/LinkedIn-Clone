@@ -24,12 +24,13 @@ var postgresUsername = builder.AddParameter("postgres-username", secret: true);
 var postgresPassword = builder.AddParameter("postgres-password", secret: true);
 var postgres = builder.AddPostgres("postgres", postgresUsername, postgresPassword)
     .WithDataVolume(isReadOnly: false)
-    .WithEnvironment("POSTGRES_INITDB_ARGS", "-c wal_level=logical")
+    .WithArgs("-c", "wal_level=logical")
     .WithEndpoint(port: 58878, targetPort: 5432, name: "tcp", isProxied: false)
     .WithPgWeb();
 
 
 var engagementDb = postgres.AddDatabase("engagementDb");
+var chatDb = postgres.AddDatabase("chatDb");
 #endregion
 
 #region Keycloak
@@ -287,6 +288,13 @@ var graphService = builder.AddProject<GraphService>("graph-service")
     .WithReference(kafka)
     .WithExternalHttpEndpoints();
 
+var chatService = builder.AddProject<ChatService>("chat-service")
+    .WithReference(chatDb, "ChatDbConnection")
+    .WithReference(redis)
+    .WithReference(kafka)
+    .WithReference(userService)
+    .WithExternalHttpEndpoints();
+
 builder.AddProject<APIGateway>("APIGateway")
     .WithReference(userService)
     .WithReference(mediaService)
@@ -295,6 +303,7 @@ builder.AddProject<APIGateway>("APIGateway")
     .WithReference(engagementService)
     .WithReference(feedService)
     .WithReference(graphService)
+    .WithReference(chatService)
     .WithReference(keycloak, "keycloak")
     .WithReference(redis)
     .WithExternalHttpEndpoints();
