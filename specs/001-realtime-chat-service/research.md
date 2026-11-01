@@ -116,7 +116,9 @@ violates distributed ID requirement; (b) GUIDs — not `long`, breaks the spec;
 `ConnectionAccepted`/`ConnectionRemoved` Kafka events (pairs stored in
 normalized min/max order, `IsActive` flag), and on a projection miss or
 negative hit perform a one-shot verification against the UserService HTTP API
-through Aspire service discovery, caching the answer.
+(`GET /users/connections/{otherUserId}/status`, caller identified by
+`X-User-Id`) through Aspire service discovery, caching the answer for 60 s
+(positive) / 10 s (negative).
 
 **Rationale**: Satisfies FR-001/FR-016 and Constitution I: no cross-service DB
 access. Projection keeps the send hot path local; the API fallback closes the

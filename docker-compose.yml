@@ -33,6 +33,21 @@ services:
     networks:
       - app_network
 
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    command: ["postgres", "-c", "wal_level=logical"]
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=chatDb
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app_network
+
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: sqlserver
@@ -66,6 +81,7 @@ services:
     depends_on:
       - kafka
       - sqlserver
+      - postgres
 
   schema-registry:
     image: confluentinc/cp-schema-registry:latest
@@ -147,6 +163,7 @@ networks:
 
 volumes:
   redis_data:
+  postgres_data:
   sqlserver_data:
   kafka_data:
   elasticsearch_data:

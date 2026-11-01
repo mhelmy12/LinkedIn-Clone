@@ -33,10 +33,31 @@ builder.AddRedisClient("redis");
 var redisConnectionString = builder.Configuration.GetConnectionString("redis");
 var signalR = builder.Services.AddSignalR();
 
+signalR.AddJsonProtocol(options =>
+    options.PayloadSerializerOptions.Converters.Add(new LongToStringJsonConverter()));
+
 if (!string.IsNullOrWhiteSpace(redisConnectionString))
 {
     signalR.AddStackExchangeRedis(redisConnectionString);
 }
+#endregion
+
+#region JSON (Snowflake ids as strings)
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.Converters.Add(new LongToStringJsonConverter()));
+#endregion
+
+#region UserService fallback client
+builder.Services.AddMemoryCache();
+
+builder.Services.AddHttpClient<IUserDirectoryClient, UserDirectoryClient>(client =>
+{
+    client.BaseAddress = new Uri("http://user-service");
+    client.Timeout = TimeSpan.FromSeconds(
+        builder.Configuration.GetValue("Chat:UserDirectory:TimeoutSeconds", 3));
+});
+
+builder.Services.AddScoped<ConversationAccessService>();
 #endregion
 
 #region Authentication (gateway-injected identity)

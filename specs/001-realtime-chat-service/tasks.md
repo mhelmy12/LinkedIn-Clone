@@ -106,10 +106,10 @@ method (removed before Phase 3).
 
 ### Phase 2D — Access control & serialization (T035–T038)
 
-- [ ] T035 Create `ChatService/Services/IUserDirectoryClient.cs` + `UserDirectoryClient.cs` (typed `HttpClient` to `http://user-service` through Aspire service discovery, timeout + failure handling)
-- [ ] T036 [P] Create `ChatService/Services/PairNormalizer.cs` (`min/max` participant ordering used by every conversation write)
-- [ ] T037 Create `ChatService/Services/ConversationAccessService.cs` (participant check + active-connection check via `ChatConnectionProjection` with one-shot API verification and caching)
-- [ ] T038 [P] Create `ChatService/Infrastructure/LongToStringJsonConverter.cs` so Snowflake ids serialize as JSON strings per `contracts/rest-api.md`
+- [X] T035 Create `ChatService/Services/IUserDirectoryClient.cs` + `UserDirectoryClient.cs` (typed `HttpClient` to `http://user-service` through Aspire service discovery, timeout + failure handling; uses `GET /users/profile/{userId}` and the new `GET /users/connections/{otherUserId}/status` fallback endpoint)
+- [X] T036 [P] Create `ChatService/Services/PairNormalizer.cs` (`min/max` participant ordering used by every conversation write)
+- [X] T037 Create `ChatService/Services/ConversationAccessService.cs` (participant check + active-connection check via `ChatConnectionProjection` with one-shot API verification and caching)
+- [X] T038 [P] Create `ChatService/Infrastructure/LongToStringJsonConverter.cs` so Snowflake ids serialize as JSON strings per `contracts/rest-api.md`
 
 **Review gate**: foundation complete — build green, migration applied, consumers
 running, hub authenticated, access guard rejected for a non-connection, ids
